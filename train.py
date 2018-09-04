@@ -27,12 +27,12 @@ if __name__ == '__main__':
     for pair in pairs:
         trainning_set.append(([input_lang.word2index[w] for w in pair[0].split()], [output_lang.word2index[w] for w in pair[1].split()]))
     for i in range(100):
-        model.train(trainning_set[:100])
+        model.train(trainning_set)
         if (i % 10) == 0 :
             sentence = [input_lang.word2index[w] for w in pairs[0][0].split()]
-            print (sentence)
+            # print (sentence)
             output = (model.translate(sentence))
-            print (output)
+            # print (output)
             print (' '.join([output_lang.index2word[i] for i in output]))
             print (pairs[0][1])
 
