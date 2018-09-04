@@ -87,8 +87,6 @@ class LSTMLM:
             context = self.attend(features, h_t)
             out_vector = self.pt * dy.concatenate([context, h_t]) + self.pt_bias
             probs = dy.softmax(out_vector).vec_value()
-            print (probs)
-            print (max(probs))
             last_output = probs.index(max(probs))
             last_output_embeddings = self.pattern_embeddings[last_output]
             s.add_input(dy.concatenate([context, last_output_embeddings]))
