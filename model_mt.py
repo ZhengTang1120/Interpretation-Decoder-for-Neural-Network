@@ -15,7 +15,7 @@ class LSTMLM:
         self.word_embedding_dim = word_embedding_dim
         self.hidden_dim = hidden_dim
         self.model = dy.Model()
-        self.trainer = dy.AdamTrainer(self.model)
+        self.trainer = dy.SimpleSGDTrainer(self.model)
         self.rule_size = rule_size
         self.lstm_num_layers = lstm_num_layers
         self.max_rule_length = max_rule_length
@@ -52,7 +52,7 @@ class LSTMLM:
             s = dy.transpose(h_t) * self.attention_weight * h_e
             a = dy.softmax(s)
             context_vector += h_e * a
-        return context_vector
+        return context_vector / len(H_e)
 
     def train(self, trainning_set):
         for sentence, rule in trainning_set:
@@ -62,6 +62,7 @@ class LSTMLM:
             last_output_embeddings = self.pattern_embeddings[0]
             s = self.decoder_lstm.initial_state().add_input(dy.concatenate([dy.vecInput(self.hidden_dim), last_output_embeddings]))
 
+            rule.append(1)
             for pattern in rule:
                 h_t = s.output()
                 context = self.attend(features, h_t)
@@ -69,18 +70,19 @@ class LSTMLM:
                 probs = dy.softmax(out_vector)
                 loss.append(-dy.log(dy.pick(probs, pattern)))
                 last_output_embeddings = self.pattern_embeddings[pattern]
-                s.add_input(dy.concatenate([context, last_output_embeddings]))
+                s = s.add_input(dy.concatenate([context, last_output_embeddings]))
             loss = dy.esum(loss)
             loss.backward()
             self.trainer.update()
+            dy.renew_cg()
 
     def get_pred(self, features):
-        probs = dy.softmax(self.lb * features + self.lb_bias)
+        probs = dy.softmax(self.lb * features[-1] + self.lb_bias)
         return probs.index(max(probs))
 
     def decode(self, features):
         last_output_embeddings = self.pattern_embeddings[0]
-        s = self.decoder_lstm.initial_state().add_input(dy.concatenate([features[-1], last_output_embeddings]))
+        s = self.decoder_lstm.initial_state().add_input(dy.concatenate([dy.vecInput(self.hidden_dim), last_output_embeddings]))
         out = []
         for i in range(self.max_rule_length):
             h_t = s.output()
@@ -89,7 +91,7 @@ class LSTMLM:
             probs = dy.softmax(out_vector).vec_value()
             last_output = probs.index(max(probs))
             last_output_embeddings = self.pattern_embeddings[last_output]
-            s.add_input(dy.concatenate([context, last_output_embeddings]))
+            s = s.add_input(dy.concatenate([context, last_output_embeddings]))
             if last_output != 1:
                 out.append(last_output)
             else:

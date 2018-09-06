@@ -19,20 +19,22 @@ if __name__ == '__main__':
     # rules = get_rules("rules")
     # trainning_set = get_trainning_data("causalOut_oct7_replicate", rules)
     # words, patterns, rels = make_vocabularies(trainning_set)
-    input_lang, output_lang, pairs = prepareData('eng', 'fra', False)
+    output_lang, input_lang, pairs = prepareData('eng', 'fra', False)
 
-    model = LSTMLM(input_lang.n_words, 200, 100, 100, 200, output_lang.n_words, 2, 20)
+    model = LSTMLM(input_lang.n_words, 200, 200, 200, 200, output_lang.n_words, 2, 20)
 
     trainning_set = list()
     for pair in pairs:
-        trainning_set.append(([input_lang.word2index[w] for w in pair[0].split()], [output_lang.word2index[w] for w in pair[1].split()]))
+        trainning_set.append(([input_lang.word2index[w] for w in pair[1].split()], [output_lang.word2index[w] for w in pair[0].split()]))
+    test =  random.choice(pairs)
+    print ("French: %s"%test[1])
+    print ("English: %s"%test[0])
     for i in range(100):
+        random.shuffle(trainning_set)
         model.train(trainning_set)
         if (i % 10) == 0 :
-            sentence = [input_lang.word2index[w] for w in pairs[0][0].split()]
-            # print (sentence)
+            sentence = [input_lang.word2index[w] for w in test[1].split()]
             output = (model.translate(sentence))
-            # print (output)
-            print (' '.join([output_lang.index2word[i] for i in output]))
-            print (pairs[0][1])
+            trans = (' '.join([output_lang.index2word[i] for i in output]))
+            print ("Translation%d: %s"%(i/10,trans))
 
