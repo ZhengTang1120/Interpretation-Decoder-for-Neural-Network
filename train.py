@@ -34,7 +34,6 @@ if __name__ == '__main__':
     trainning_set = list()
     for pair in pairs:
         trainning_set.append(([input_lang.word2index[w] for w in pair[1].split()], [output_lang.word2index[w] for w in pair[0].split()]))
-    trainning_set = trainning_set[:100]
     test =  random.choice(pairs)
     print ("French: %s"%test[1])
     print ("English: %s"%test[0])
