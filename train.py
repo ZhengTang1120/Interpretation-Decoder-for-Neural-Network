@@ -2,6 +2,7 @@ from language import *
 import argparse
 import random
 from model_mt import *
+import pickle
 
 if __name__ == '__main__':
 
@@ -19,13 +20,21 @@ if __name__ == '__main__':
     # rules = get_rules("rules")
     # trainning_set = get_trainning_data("causalOut_oct7_replicate", rules)
     # words, patterns, rels = make_vocabularies(trainning_set)
-    output_lang, input_lang, pairs = prepareData('eng', 'fra', False)
+    try:
+        with open('corpra.pickle', 'rb') as f:
+            output_lang, input_lang, pairs = pickle.load(f)
+    except FileNotFoundError:
+        output_lang, input_lang, pairs = prepareData('eng', 'fra', False)
+        with open('corpra.pickle', 'wb') as f:
+            pickle.dump((output_lang, input_lang, pairs), f)
+        
 
     model = LSTMLM(input_lang.n_words, 200, 200, 200, 200, output_lang.n_words, 2, 20)
 
     trainning_set = list()
     for pair in pairs:
         trainning_set.append(([input_lang.word2index[w] for w in pair[1].split()], [output_lang.word2index[w] for w in pair[0].split()]))
+    trainning_set = trainning_set[:100]
     test =  random.choice(pairs)
     print ("French: %s"%test[1])
     print ("English: %s"%test[0])
@@ -37,4 +46,5 @@ if __name__ == '__main__':
             output = (model.translate(sentence))
             trans = (' '.join([output_lang.index2word[i] for i in output]))
             print ("Translation%d: %s"%(i/10,trans))
+            model.save("model%d"%(i/10))
 

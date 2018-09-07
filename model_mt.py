@@ -7,6 +7,8 @@ dynet_config.set(
 )
 import dynet as dy
 
+import pickle
+
 class LSTMLM:
 
     def __init__(self, vocab_size, word_embedding_dim, hidden_dim, pattern_hidden_dim, pattern_embeddings_dim,
@@ -40,6 +42,26 @@ class LSTMLM:
         )
         self.pt = self.model.add_parameters((self.rule_size, self.pattern_hidden_dim + self.hidden_dim))
         self.pt_bias = self.model.add_parameters((self.rule_size))
+
+    def save(self, name):
+        params = (
+            self.vocab_size, self.word_embedding_dim, self.hidden_dim, 
+            self.pattern_hidden_dim, self.pattern_embeddings_dim,
+            self.rule_size, self.lstm_num_layers, self.max_rule_length
+        )
+        # save model
+        self.model.save(f'{name}.model')
+        # save pickle
+        with open(f'{name}.pickle', 'wb') as f:
+            pickle.dump(params, f)
+
+    @staticmethod
+    def load(name):
+        with open(f'{name}.pickle', 'rb') as f:
+            params = pickle.load(f)
+            parser = LSTMLM(*params)
+            parser.model.populate(f'{name}.model')
+            return parser
 
     def encode_sentence(self, sentence):
         embeds_sent = [self.word_embeddings[word] for word in sentence]
