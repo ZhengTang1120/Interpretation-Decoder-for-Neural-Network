@@ -105,6 +105,6 @@ class LSTMLM:
         attention = attention.vec_value()
         hidden = dy.tanh(self.lb * dy.concatenate([context, h_t]) + self.lb_bias)
         out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
-        res = 1 if out_vector.npvalue() > 0.3 else 0
+        res = 1 if out_vector.npvalue() > 0.05 else 0
         # probs = dy.softmax(out_vector).vec_value()
         return attention.index(max(attention)), res, out_vector.npvalue()
