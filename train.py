@@ -70,7 +70,8 @@ if __name__ == '__main__':
                 sentence = datapoint[0]
                 entity = datapoint[1]
                 pos = datapoint[-1]
-                pred_trigger, pred_label = (model.get_pred(sentence, pos, entity))
+                pred_trigger, pred_label, score = (model.get_pred(sentence, pos, entity))
+                print (pred_trigger, datapoint[2], pred_label, datapoint[3], score)
                 if pred_trigger == datapoint[2]:
                     i += 1
                 if pred_label == datapoint[3]:
