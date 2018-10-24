@@ -1,6 +1,28 @@
 import os
 import glob
-# import yaml
+import yaml
+import json
+
+class Lang:
+    def __init__(self, name):
+        self.name = name
+        self.word2index = {}
+        self.word2count = {}
+        self.index2word = {0: "SOS", 1: "EOS"}
+        self.n_words = 2  # Count SOS and EOS
+
+    def addSentence(self, sentence):
+        for word in sentence.split(' '):
+            self.addWord(word)
+
+    def addWord(self, word):
+        if word not in self.word2index:
+            self.word2index[word] = self.n_words
+            self.word2count[word] = 1
+            self.index2word[self.n_words] = word
+            self.n_words += 1
+        else:
+            self.word2count[word] += 1        
 
 def get_trainning_data(folder, rules):
     res = []
@@ -31,7 +53,7 @@ def get_rules(folder):
             docs = yaml.load_all(stream)
             for doc in docs:
                 for rule in doc['rules']:
-                    rules[rule['name']] = rule['pattern']+' *eos*'
+                    rules[rule['name']] = rule['pattern']
     return rules
 
 def make_vocabularies(trainning_set):
@@ -51,5 +73,4 @@ def make_vocabularies(trainning_set):
     rels = list(rels)
     return (words, patterns, rels)
 
-# def tokenizer(seq):
 

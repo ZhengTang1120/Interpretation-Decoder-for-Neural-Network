@@ -1,49 +1,89 @@
-from language import *
+# from language import *
 import argparse
 import random
-from model_mt import *
 import pickle
+import json
+
+from model_dy import *
+from bio_utils import *
 
 if __name__ == '__main__':
 
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--rules', default=None)
-    # parser.add_argument('--data', default=None)
-    # parser.add_argument('--outdir', default='out')
-    # parser.add_argument('--w_embed_dim',         type=int,   default=100)
-    # parser.add_argument('--lstm_hidden_size',    type=int,   default=125)
-    # parser.add_argument('--lstm_num_layers',     type=int,   default=3)
-    # parser.add_argument('--p_hidden_size',  type=int,   default=100)
-    # parser.add_argument('--epochs',              type=int,   default=30)
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('datadir')
+    parser.add_argument('dev_datadir')
+    args = parser.parse_args()
 
-    # rules = get_rules("rules")
-    # trainning_set = get_trainning_data("causalOut_oct7_replicate", rules)
-    # words, patterns, rels = make_vocabularies(trainning_set)
-    try:
-        with open('corpra.pickle', 'rb') as f:
-            output_lang, input_lang, pairs = pickle.load(f)
-    except FileNotFoundError:
-        output_lang, input_lang, pairs = prepareData('eng', 'fra', False)
-        with open('corpra.pickle', 'wb') as f:
-            pickle.dump((output_lang, input_lang, pairs), f)
-        
-
-    model = LSTMLM(input_lang.n_words, 200, 200, 200, 200, output_lang.n_words, 2, 20)
-
-    trainning_set = list()
-    for pair in pairs:
-        trainning_set.append(([input_lang.word2index[w] for w in pair[1].split()], [output_lang.word2index[w] for w in pair[0].split()]))
-    test =  random.choice(pairs)
-    print ("French: %s"%test[1])
-    print ("English: %s"%test[0])
+    input_lang, raw_train = prepare_data(args.datadir)
+    input2_lang, raw_test = prepare_data(args.dev_datadir)
+    model = LSTMLM(input_lang.n_words, 21, 5, 200, 200, len(input_lang.labels), 2)
+    trainning_set = []
+    test = []
+    i = j = 0
+    print (input_lang.label2id)
+    for datapoint in raw_train:
+        if datapoint[2]:
+            try:
+                i += 1
+                trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
+                    [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
+                    datapoint[0].index(word_tokenize(datapoint[2])[0]), 
+                    input_lang.label2id[datapoint[3]], datapoint[-1]))
+            except:
+                pass
+        else:
+            j += 1
+            trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
+                [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
+                0, 0, datapoint[-1]))
+    print(i,j)
+    i = j = 0
+    for datapoint in raw_test:
+        if datapoint[2]:
+            try:
+                i += 1
+                test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],
+                    [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[1])],
+                    datapoint[0].index(word_tokenize(datapoint[2])[0]), 
+                    input_lang.label2id[datapoint[3]], datapoint[-1]))
+            except:
+                pass
+        else:
+            j += 1
+            test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],
+                [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[1])],
+                0, 0, datapoint[-1]))
+    print(i,j)
     for i in range(100):
         random.shuffle(trainning_set)
         model.train(trainning_set)
         if (i % 10) == 0 :
-            sentence = [input_lang.word2index[w] for w in test[1].split()]
-            output = (model.translate(sentence))
-            trans = (' '.join([output_lang.index2word[i] for i in output]))
-            print ("Translation%d: %s"%(i/10,trans))
-            model.save("model%d"%(i/10))
+            i = 0
+            j = 0
+            k = 0
+            l = 0
+            n = 0
+            m = 0
+            x = 0
+            random.shuffle(test)
+            for datapoint in test:
+                sentence = datapoint[0]
+                entity = datapoint[1]
+                pos = datapoint[-1]
+                pred_trigger, pred_label = (model.get_pred(sentence, pos, entity))
+                if pred_trigger == datapoint[2]:
+                    i += 1
+                if pred_label == datapoint[3]:
+                    j += 1
+                if pred_trigger == datapoint[2] and pred_label == datapoint[3]:
+                    k += 1
+                if pred_label != 0:
+                    x += 1
+                    if pred_trigger == datapoint[2]:
+                        l += 1
+                    if pred_label == datapoint[3]:
+                        m += 1
+                    if pred_trigger == datapoint[2] and pred_label == datapoint[3]:
+                        n += 1
+            print (len(test), i, j, k, x, l ,m, n)
 

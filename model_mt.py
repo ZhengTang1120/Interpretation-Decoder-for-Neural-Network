@@ -71,7 +71,7 @@ class LSTMLM:
     def attend(self, H_e, h_t):
         context_vector = dy.vecInput(self.hidden_dim)
         for h_e in H_e:
-            s = dy.transpose(h_t) * self.attention_weight * h_e
+            s = dy.transpose(h_t) * self.attention_weight.expr() * h_e
             a = dy.softmax(s)
             context_vector += h_e * a
         return context_vector / len(H_e)
@@ -88,7 +88,7 @@ class LSTMLM:
             for pattern in rule:
                 h_t = s.output()
                 context = self.attend(features, h_t)
-                out_vector = self.pt * dy.concatenate([context, h_t]) + self.pt_bias
+                out_vector = self.pt.expr() * dy.concatenate([context, h_t]) + self.pt_bias.expr()
                 probs = dy.softmax(out_vector)
                 loss.append(-dy.log(dy.pick(probs, pattern)))
                 last_output_embeddings = self.pattern_embeddings[pattern]
@@ -99,7 +99,7 @@ class LSTMLM:
             dy.renew_cg()
 
     def get_pred(self, features):
-        probs = dy.softmax(self.lb * features[-1] + self.lb_bias)
+        probs = dy.softmax(self.lb.expr() * features[-1] + self.lb_bias.expr())
         return probs.index(max(probs))
 
     def decode(self, features):
@@ -109,7 +109,7 @@ class LSTMLM:
         for i in range(self.max_rule_length):
             h_t = s.output()
             context = self.attend(features, h_t)
-            out_vector = self.pt * dy.concatenate([context, h_t]) + self.pt_bias
+            out_vector = self.pt.expr() * dy.concatenate([context, h_t]) + self.pt_bias.expr()
             probs = dy.softmax(out_vector).vec_value()
             last_output = probs.index(max(probs))
             last_output_embeddings = self.pattern_embeddings[last_output]
