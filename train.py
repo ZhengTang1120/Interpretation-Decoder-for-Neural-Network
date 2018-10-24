@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     input_lang, raw_train = prepare_data(args.datadir)
     input2_lang, raw_test = prepare_data(args.dev_datadir)
-    model = LSTMLM(input_lang.n_words, 21, 5, 200, 200, len(input_lang.labels), 2)
+    model = LSTMLM(input_lang.n_words, 41, 20, 200, 200, len(input_lang.labels), 2)
     trainning_set = []
     test = []
     i = j = 0

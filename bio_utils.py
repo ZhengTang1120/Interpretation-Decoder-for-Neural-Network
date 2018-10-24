@@ -132,10 +132,10 @@ def prepare_data(dirname):
                             e_pos = words.index(ent)
                         except:
                             e_pos = 0
-                        st_pos = e_pos-10 if e_pos-10 > 0 else 0
-                        ed_pos = e_pos+11 if e_pos+11 < len(words) else len(words)
+                        st_pos = e_pos-20 if e_pos-20 > 0 else 0
+                        ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         words = words[st_pos:ed_pos]
-                        pos = [i-e_pos+10 for i in range(st_pos, ed_pos)]
+                        pos = [i-e_pos+20 for i in range(st_pos, ed_pos)]
                         train.append((words, entity[-1], trigger[-1], tlbl, pos))
                 elif y:
                     for w in word_tokenize(y[-1]):
@@ -145,10 +145,10 @@ def prepare_data(dirname):
                             e_pos = words.index(ent)
                     except:
                         e_pos = 0
-                    st_pos = e_pos-10 if e_pos-10 > 0 else 0
-                    ed_pos = e_pos+11 if e_pos+11 < len(words) else len(words)
+                    st_pos = e_pos-20 if e_pos-20 > 0 else 0
+                    ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                     words = words[st_pos:ed_pos]
-                    pos = [i-e_pos+10 for i in range(st_pos, ed_pos)]
+                    pos = [i-e_pos+20 for i in range(st_pos, ed_pos)]
                     train.append((words, y[-1], None, None, pos))
                 input_lang.addSentence(words)
     return input_lang, train
