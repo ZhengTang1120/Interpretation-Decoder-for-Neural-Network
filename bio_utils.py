@@ -139,7 +139,7 @@ def prepare_data(dirname):
                         # st_pos = e_pos-20 if e_pos-20 > 0 else 0
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
-                        pos = [i-e_pos for i in range(0, len(words))]
+                        pos = [i-e_pos if i-e_pos>=-20 else '<'for i in range(0, e_pos)] + [i-e_pos if i-e_pos<=20 else '>'for i in range(e_pos, len(words))]
                         pos_lang.addSentence(pos)
                         train.append((words, entity[-1], trigger[-1], tlbl, pos))
                 elif y:
@@ -153,7 +153,7 @@ def prepare_data(dirname):
                     # st_pos = e_pos-20 if e_pos-20 > 0 else 0
                     # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                     # words = words[st_pos:ed_pos]
-                    pos = [i-e_pos for i in range(0, len(words))]
+                    pos = [i-e_pos if i-e_pos>=-20 else '<'for i in range(0, e_pos)] + [i-e_pos if i-e_pos<=20 else '>'for i in range(e_pos, len(words))]
                     pos_lang.addSentence(pos)
                     train.append((words, y[-1], None, None, pos))
                 input_lang.addSentence(words)
