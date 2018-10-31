@@ -27,7 +27,7 @@ class LSTMLM:
         self.pos_embeddings = self.model.add_lookup_parameters((self.pos_win_size, self.pos_embedding_dim))
         self.encoder_lstm = dy.BiRNNBuilder(
             self.lstm_num_layers,
-            self.word_embedding_dim + self.pos_embedding_dim,
+            self.word_embedding_dim,
             self.hidden_dim,
             self.model,
             dy.VanillaLSTMBuilder,
@@ -63,7 +63,7 @@ class LSTMLM:
             return parser
 
     def encode_sentence(self, sentence, pos):
-        embeds_sent = [dy.concatenate([self.word_embeddings[sentence[i]], self.pos_embeddings[pos[i]]])
+        embeds_sent = [self.word_embeddings[sentence[i]] #[dy.concatenate([self.word_embeddings[sentence[i]], self.pos_embeddings[pos[i]]])
          for i in range(len(sentence))]
         features = [f for f in self.encoder_lstm.transduce(embeds_sent)]
         return features
