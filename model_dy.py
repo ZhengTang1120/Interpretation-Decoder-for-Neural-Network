@@ -70,7 +70,7 @@ class LSTMLM:
 
     def attend(self, H_e, h_t):
         H_e =dy.concatenate_cols(H_e)
-        S = dy.transpose(h_t) * self.attention_weight * H_e
+        S = dy.transpose(h_t) * self.attention_weight.expr() * H_e
         S = dy.transpose(S)
         A = dy.softmax(S)
         context_vector = H_e * A
@@ -86,8 +86,8 @@ class LSTMLM:
             h_t = dy.concatenate([features[-1], entity_embeds])
             attention, context = self.attend(features, h_t)
             loss.append(-dy.log(dy.pick(attention, trigger)))
-            hidden = dy.tanh(self.lb * dy.concatenate([context, h_t]) + self.lb_bias)
-            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            hidden = dy.tanh(self.lb.expr() * dy.concatenate([context, h_t]) + self.lb_bias.expr())
+            out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
             # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
             loss.append(dy.binary_log_loss(out_vector, label))
@@ -103,8 +103,8 @@ class LSTMLM:
         h_t = dy.concatenate([features[-1], entity_embeds])
         attention, context = self.attend(features, h_t)
         attention = attention.vec_value()
-        hidden = dy.tanh(self.lb * dy.concatenate([context, h_t]) + self.lb_bias)
-        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+        hidden = dy.tanh(self.lb.expr() * dy.concatenate([context, h_t]) + self.lb_bias.expr())
+        out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
         res = 1 if out_vector.npvalue() > 0.05 else 0
         # probs = dy.softmax(out_vector).vec_value()
         return attention.index(max(attention)), res, out_vector.npvalue()

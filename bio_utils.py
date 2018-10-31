@@ -140,6 +140,7 @@ def prepare_data(dirname):
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
                         pos = [i-e_pos for i in range(0, len(words))]
+                        pos_lang.addSentence(pos)
                         train.append((words, entity[-1], trigger[-1], tlbl, pos))
                 elif y:
                     for w in word_tokenize(y[-1]):
@@ -153,8 +154,8 @@ def prepare_data(dirname):
                     # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                     # words = words[st_pos:ed_pos]
                     pos = [i-e_pos for i in range(0, len(words))]
+                    pos_lang.addSentence(pos)
                     train.append((words, y[-1], None, None, pos))
-                pos_lang.addSentence(pos)
                 input_lang.addSentence(words)
     return input_lang, pos_lang, train
 
