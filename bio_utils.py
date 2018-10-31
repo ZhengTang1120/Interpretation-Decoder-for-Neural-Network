@@ -80,7 +80,9 @@ def refine_words(words, e):
     return words
 
 def prepare_data(dirname):
+    maxl = 0
     input_lang = Lang("input")
+    pos_lang = Lang("position")
     train = []
     for fname in glob.glob(os.path.join(dirname, '*.a1')):
         root = os.path.splitext(fname)[0]
@@ -116,6 +118,8 @@ def prepare_data(dirname):
         with open(txt) as f:
             text = f.read()
             for words, starts, ends in get_token_spans(text):
+                if len(words) > maxl:
+                    maxl = len(words)
                 s = starts[0]
                 e = ends[-1]
                 x = list(get_trigger(s, e, phosphorylations))
@@ -132,10 +136,10 @@ def prepare_data(dirname):
                             e_pos = words.index(ent)
                         except:
                             e_pos = 0
-                        st_pos = e_pos-20 if e_pos-20 > 0 else 0
-                        ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
-                        words = words[st_pos:ed_pos]
-                        pos = [i-e_pos+20 for i in range(st_pos, ed_pos)]
+                        # st_pos = e_pos-20 if e_pos-20 > 0 else 0
+                        # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
+                        # words = words[st_pos:ed_pos]
+                        pos = [i-e_pos for i in range(0, len(words))]
                         train.append((words, entity[-1], trigger[-1], tlbl, pos))
                 elif y:
                     for w in word_tokenize(y[-1]):
@@ -145,13 +149,14 @@ def prepare_data(dirname):
                             e_pos = words.index(ent)
                     except:
                         e_pos = 0
-                    st_pos = e_pos-20 if e_pos-20 > 0 else 0
-                    ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
-                    words = words[st_pos:ed_pos]
-                    pos = [i-e_pos+20 for i in range(st_pos, ed_pos)]
+                    # st_pos = e_pos-20 if e_pos-20 > 0 else 0
+                    # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
+                    # words = words[st_pos:ed_pos]
+                    pos = [i-e_pos for i in range(0, len(words))]
                     train.append((words, y[-1], None, None, pos))
+                pos_lang.addSentence(pos)
                 input_lang.addSentence(words)
-    return input_lang, train
+    return input_lang, pos_lang, train
 
 # if __name__ == '__main__':
     

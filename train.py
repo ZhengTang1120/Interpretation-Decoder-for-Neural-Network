@@ -14,9 +14,9 @@ if __name__ == '__main__':
     parser.add_argument('dev_datadir')
     args = parser.parse_args()
 
-    input_lang, raw_train = prepare_data(args.datadir)
-    input2_lang, raw_test = prepare_data(args.dev_datadir)
-    model = LSTMLM(input_lang.n_words, 41, 20, 200, 200, len(input_lang.labels), 2)
+    input_lang, pl1, raw_train = prepare_data(args.datadir)
+    input2_lang, pl2, raw_test = prepare_data(args.dev_datadir)
+    model = LSTMLM(input_lang.n_words, pl1.n_words, 20, 200, 200, len(input_lang.labels), 2)
     trainning_set = []
     test = []
     i = j = 0
@@ -28,14 +28,14 @@ if __name__ == '__main__':
                 trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
                     [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
                     datapoint[0].index(word_tokenize(datapoint[2])[0]), 
-                    input_lang.label2id[datapoint[3]], datapoint[-1]))
+                    input_lang.label2id[datapoint[3]], [pl1.word2index[p] for p in datapoint[-1]]))
             except:
                 pass
         else:
             j += 1
             trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
                 [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
-                0, 0, datapoint[-1]))
+                0, 0, [pl1.word2index[p] for p in datapoint[-1]]))
     print(i,j)
     i = j = 0
     for datapoint in raw_test:
@@ -45,14 +45,16 @@ if __name__ == '__main__':
                 test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],
                     [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[1])],
                     datapoint[0].index(word_tokenize(datapoint[2])[0]), 
-                    input_lang.label2id[datapoint[3]], datapoint[-1]))
+                    input_lang.label2id[datapoint[3]], 
+                    [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]]))
             except:
                 pass
         else:
             j += 1
             test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],
                 [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[1])],
-                0, 0, datapoint[-1]))
+                0, 0, 
+                [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]]))
     print(i,j)
     for i in range(100):
         random.shuffle(trainning_set)
