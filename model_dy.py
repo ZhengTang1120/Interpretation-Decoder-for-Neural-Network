@@ -110,7 +110,7 @@ class LSTMLM:
             self.trainer.update()
             dy.renew_cg()
 
-    def get_pred(self, sentence, pos, entity):
+    def get_pred(self, sentence, pos, chars, entity):
         features = self.encode_sentence(sentence, pos, chars)
         entity_embeds = dy.average([self.word_embeddings[word] for word in entity])
         h_t = dy.concatenate([features[-1], entity_embeds])

@@ -74,8 +74,9 @@ if __name__ == '__main__':
             for datapoint in test:
                 sentence = datapoint[0]
                 entity = datapoint[1]
-                pos = datapoint[-1]
-                pred_trigger, pred_label, score = (model.get_pred(sentence, pos, entity))
+                pos = datapoint[-2]
+                chars = datapoint[-1]
+                pred_trigger, pred_label, score = (model.get_pred(sentence, pos,chars, entity))
                 # print (pred_trigger, datapoint[2], pred_label, datapoint[3], score)
                 if pred_trigger == datapoint[2]:
                     i += 1
