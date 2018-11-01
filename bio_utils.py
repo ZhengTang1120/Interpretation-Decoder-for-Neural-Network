@@ -83,6 +83,7 @@ def prepare_data(dirname):
     maxl = 0
     input_lang = Lang("input")
     pos_lang = Lang("position")
+    char_lang = Lang("char")
     train = []
     for fname in glob.glob(os.path.join(dirname, '*.a1')):
         root = os.path.splitext(fname)[0]
@@ -136,9 +137,9 @@ def prepare_data(dirname):
                             e_pos = words.index(ent)
                         except:
                             e_pos = 0
-                        st_pos = e_pos-20 if e_pos-20 > 0 else 0
-                        ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
-                        words = words[st_pos:ed_pos]
+                        # st_pos = e_pos-20 if e_pos-20 > 0 else 0
+                        # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
+                        # words = words[st_pos:ed_pos]
                         pos = [i-e_pos for i in range(0, len(words))]
                         pos_lang.addSentence(pos)
                         train.append((words, entity[-1], trigger[-1], tlbl, pos))
@@ -150,14 +151,16 @@ def prepare_data(dirname):
                             e_pos = words.index(ent)
                     except:
                         e_pos = 0
-                    st_pos = e_pos-20 if e_pos-20 > 0 else 0
-                    ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
-                    words = words[st_pos:ed_pos]
+                    # st_pos = e_pos-20 if e_pos-20 > 0 else 0
+                    # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
+                    # words = words[st_pos:ed_pos]
                     pos = [i-e_pos for i in range(0, len(words))]
                     pos_lang.addSentence(pos)
                     train.append((words, y[-1], None, None, pos))
                 input_lang.addSentence(words)
-    return input_lang, pos_lang, train
+                for w in words:
+                    char_lang.addSentence(w)
+    return input_lang, pos_lang, char_lang, train
 
 # if __name__ == '__main__':
     

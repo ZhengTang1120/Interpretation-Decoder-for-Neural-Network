@@ -14,13 +14,12 @@ if __name__ == '__main__':
     parser.add_argument('dev_datadir')
     args = parser.parse_args()
 
-    input_lang, pl1, raw_train = prepare_data(args.datadir)
-    input2_lang, pl2, raw_test = prepare_data(args.dev_datadir)
-    model = LSTMLM(input_lang.n_words, pl1.n_words, 20, 200, 200, len(input_lang.labels), 2)
+    input_lang, pl1, char, raw_train = prepare_data(args.datadir)
+    input2_lang, pl2, char2, raw_test = prepare_data(args.dev_datadir)
+    model = LSTMLM(input_lang.n_words, char.n_words, 50, 50, 200, 200, len(input_lang.labels), 2)
     trainning_set = []
     test = []
     i = j = 0
-    print (input_lang.label2id)
     for datapoint in raw_train:
         if datapoint[2]:
             try:
@@ -28,14 +27,16 @@ if __name__ == '__main__':
                 trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
                     [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
                     datapoint[0].index(word_tokenize(datapoint[2])[0]), 
-                    input_lang.label2id[datapoint[3]], [pl1.word2index[p] for p in datapoint[-1]]))
+                    input_lang.label2id[datapoint[3]], [pl1.word2index[p] for p in datapoint[-1]],
+                    [[char.word2index[c] for c in w] for w in datapoint[0]]))
             except:
                 pass
         else:
             j += 1
             trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
                 [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
-                0, 0, [pl1.word2index[p] for p in datapoint[-1]]))
+                0, 0, [pl1.word2index[p] for p in datapoint[-1]],
+                [[char.word2index[c] for c in w] for w in datapoint[0]]))
     print(i,j)
     i = j = 0
     for datapoint in raw_test:
@@ -46,7 +47,8 @@ if __name__ == '__main__':
                     [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[1])],
                     datapoint[0].index(word_tokenize(datapoint[2])[0]), 
                     input_lang.label2id[datapoint[3]], 
-                    [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]]))
+                    [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]],
+                    [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]]))
             except:
                 pass
         else:
@@ -54,7 +56,8 @@ if __name__ == '__main__':
             test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],
                 [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[1])],
                 0, 0, 
-                [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]]))
+                [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]],
+                [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]]))
     print(i,j)
     for i in range(100):
         random.shuffle(trainning_set)
@@ -73,7 +76,7 @@ if __name__ == '__main__':
                 entity = datapoint[1]
                 pos = datapoint[-1]
                 pred_trigger, pred_label, score = (model.get_pred(sentence, pos, entity))
-                print (pred_trigger, datapoint[2], pred_label, datapoint[3], score)
+                # print (pred_trigger, datapoint[2], pred_label, datapoint[3], score)
                 if pred_trigger == datapoint[2]:
                     i += 1
                 if pred_label == datapoint[3]:
