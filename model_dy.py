@@ -36,7 +36,7 @@ class LSTMLM:
         )
         self.encoder_lstm = dy.BiRNNBuilder(
             self.lstm_num_layers,
-            self.word_embedding_dim# + char_hidden_size,
+            self.word_embedding_dim,# + char_hidden_size,
             self.hidden_dim,
             self.model,
             dy.VanillaLSTMBuilder,
