@@ -8,6 +8,7 @@ from model_dy import *
 from bio_utils import *
 
 if __name__ == '__main__':
+    random.seed(1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('datadir')
@@ -31,7 +32,7 @@ if __name__ == '__main__':
                     [[char.word2index[c] for c in w] for w in datapoint[0]]))
             except:
                 pass
-        else:
+        elif random.random()>0.5:
             j += 1
             trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],
                 [input_lang.word2index[w] for w in word_tokenize(datapoint[1])],
