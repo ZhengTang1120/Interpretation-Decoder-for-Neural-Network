@@ -2,7 +2,7 @@ import numpy as np
 import dynet_config
 dynet_config.set(
     mem=6144,
-    random_seed=1,
+    random_seed=1978,
     # autobatch=True
 )
 import dynet as dy
