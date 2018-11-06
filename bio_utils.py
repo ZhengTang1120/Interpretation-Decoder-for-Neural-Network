@@ -83,6 +83,7 @@ def prepare_data(dirname):
     maxl = 0
     input_lang = Lang("input")
     pos_lang = Lang("position")
+    char_lang = Lang("char")
     train = []
     for fname in glob.glob(os.path.join(dirname, '*.a1')):
         root = os.path.splitext(fname)[0]
@@ -157,7 +158,9 @@ def prepare_data(dirname):
                     pos_lang.addSentence(pos)
                     train.append((words, y[-1], None, None, pos))
                 input_lang.addSentence(words)
-    return input_lang, pos_lang, train
+                for w in words:
+                    char_lang.addSentence(w)
+    return input_lang, pos_lang, char_lang, train
 
 # if __name__ == '__main__':
     
