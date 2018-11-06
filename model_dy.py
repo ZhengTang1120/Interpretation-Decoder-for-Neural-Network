@@ -35,7 +35,7 @@ class LSTMLM:
 
         self.attention_weight = self.model.add_parameters((self.hidden_dim + self.word_embedding_dim, self.hidden_dim))
 
-        self.lb = self.model.add_parameters((self.hidden_dim//2, self.hidden_dim))
+        self.lb = self.model.add_parameters((self.hidden_dim//2, self.hidden_dim + self.word_embedding_dim))
         self.lb_bias = self.model.add_parameters((self.hidden_dim//2))
 
         self.lb2 = self.model.add_parameters((1, self.hidden_dim//2))
@@ -86,7 +86,7 @@ class LSTMLM:
             h_t = dy.concatenate([features[-1], entity_embeds])
             attention, context = self.attend(features, h_t)
             loss.append(-dy.log(dy.pick(attention, trigger)))
-            hidden = dy.tanh(self.lb * context + self.lb_bias)
+            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
             out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
             # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
@@ -103,7 +103,7 @@ class LSTMLM:
         h_t = dy.concatenate([features[-1], entity_embeds])
         attention, context = self.attend(features, h_t)
         attention = attention.vec_value()
-        hidden = dy.tanh(self.lb * context + self.lb_bias)
+        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
         out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
         res = 1 if out_vector.npvalue() > 0.05 else 0
         # probs = dy.softmax(out_vector).vec_value()
