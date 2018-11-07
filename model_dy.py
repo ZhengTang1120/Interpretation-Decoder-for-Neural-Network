@@ -11,32 +11,23 @@ import pickle
 
 class LSTMLM:
 
-    def __init__(self, vocab_size, char_size, char_embedding_dim, char_hidden_size,
+    def __init__(self, vocab_size, pos_win_size, pos_embedding_dim, 
         word_embedding_dim, hidden_dim, label_size, lstm_num_layers):
         self.vocab_size = vocab_size
-        self.char_size = char_size
+        self.pos_win_size = pos_win_size
         self.word_embedding_dim = word_embedding_dim
-        self.char_embedding_dim = char_embedding_dim
+        self.pos_embedding_dim = pos_embedding_dim
         self.hidden_dim = hidden_dim
         self.model = dy.Model()
         self.trainer = dy.SimpleSGDTrainer(self.model)
         self.label_size = label_size
         self.lstm_num_layers = lstm_num_layers
-        self.char_hidden_size = char_hidden_size
 
         self.word_embeddings = self.model.add_lookup_parameters((self.vocab_size, self.word_embedding_dim))
-        self.char_embeddings = self.model.add_lookup_parameters((self.char_size, self.char_embedding_dim))
-        
-        self.character_lstm = dy.BiRNNBuilder(
-            self.lstm_num_layers,
-            self.char_embedding_dim,
-            self.char_hidden_size,
-            self.model,
-            dy.VanillaLSTMBuilder,
-        )
+        self.pos_embeddings = self.model.add_lookup_parameters((self.pos_win_size, self.pos_embedding_dim))
         self.encoder_lstm = dy.BiRNNBuilder(
             self.lstm_num_layers,
-            self.word_embedding_dim,# + char_hidden_size,
+            self.word_embedding_dim,
             self.hidden_dim,
             self.model,
             dy.VanillaLSTMBuilder,
@@ -44,16 +35,19 @@ class LSTMLM:
 
         self.attention_weight = self.model.add_parameters((self.hidden_dim + self.word_embedding_dim, self.hidden_dim))
 
-        self.lb = self.model.add_parameters((self.hidden_dim//2, self.hidden_dim + self.word_embedding_dim))
-        self.lb_bias = self.model.add_parameters((self.hidden_dim//2))
+        self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim + self.word_embedding_dim))
+        self.lb_bias = self.model.add_parameters((self.hidden_dim))
 
-        self.lb2 = self.model.add_parameters((1, self.hidden_dim//2))
+        self.lb2 = self.model.add_parameters((1, self.hidden_dim))
         self.lb2_bias = self.model.add_parameters((1))
+
+        self.tg = self.model.add_parameters((self.pos_win_size, 2 * self.hidden_dim + self.word_embedding_dim))
+        self.tg_bias = self.model.add_parameters((self.pos_win_size))
 
     def save(self, name):
         params = (
-            self.vocab_size, self.char_size, self.char_embedding_dim, self.char_hidden_size, 
-            self.word_embedding_dim, self.hidden_dim, 
+            self.vocab_size, self.pos_win_size, self.word_embedding_dim, 
+            self.pos_embedding_dim, self.hidden_dim, 
             self.pattern_hidden_dim, self.pattern_embeddings_dim,
             self.rule_size, self.lstm_num_layers, self.max_rule_length
         )
@@ -71,36 +65,38 @@ class LSTMLM:
             parser.model.populate(f'{name}.model')
             return parser
 
-    def char_encode(self, word):
-        c_seq = [self.char_embeddings[c] for c in word]
-        return self.character_lstm.transduce(c_seq)[-1]
-
-    def encode_sentence(self, sentence, pos, chars):
-        embeds_sent = [self.word_embeddings[sentence[i]] #dy.concatenate([self.word_embeddings[sentence[i]], self.char_encode(chars[i])]) #dy.concatenate([self.word_embeddings[sentence[i]], self.pos_embeddings[pos[i]]])
+    def encode_sentence(self, sentence, pos):
+        embeds_sent = [self.word_embeddings[sentence[i]] #[dy.concatenate([self.word_embeddings[sentence[i]], self.pos_embeddings[pos[i]]])
          for i in range(len(sentence))]
         features = [f for f in self.encoder_lstm.transduce(embeds_sent)]
         return features
 
     def attend(self, H_e, h_t):
         H_e =dy.concatenate_cols(H_e)
-        S = dy.transpose(h_t) * self.attention_weight * H_e
+        S = dy.transpose(h_t) * self.attention_weight.expr() * H_e
         S = dy.transpose(S)
         A = dy.softmax(S)
         context_vector = H_e * A
         return A, context_vector/H_e.npvalue().shape[-1]
 
     def train(self, trainning_set):
-        for sentence, entity, trigger, label, pos, chars in trainning_set:
-            features = self.encode_sentence(sentence, pos, chars)
+        for sentence, entity, trigger, label, pos in trainning_set:
+            features = self.encode_sentence(sentence, pos)
             loss = []            
 
             entity_embeds = dy.average([self.word_embeddings[word] for word in entity])
 
             h_t = dy.concatenate([features[-1], entity_embeds])
             attention, context = self.attend(features, h_t)
-            loss.append(-dy.log(dy.pick(attention, trigger)))
-            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            tirgger_pos = dy.tanh(self.tg.expr() * dy.concatenate([context, h_t]) + self.tg_bias.expr())
+            filter_vector = np.zeros(self.pos_win_size)
+            for i in pos:
+                filter_vector[i] = 1
+            filter_vector = dy.inputVector(filter_vector)
+            tirgger_pos = dy.softmax(dy.cmult(tirgger_pos, filter_vector))
+            loss.append(-dy.log(dy.pick(tirgger_pos, pos[trigger])))
+            hidden = dy.tanh(self.lb.expr() * dy.concatenate([context, h_t]) + self.lb_bias.expr())
+            out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
             # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
             loss.append(dy.binary_log_loss(out_vector, label))
@@ -110,14 +106,20 @@ class LSTMLM:
             self.trainer.update()
             dy.renew_cg()
 
-    def get_pred(self, sentence, pos, chars, entity):
-        features = self.encode_sentence(sentence, pos, chars)
+    def get_pred(self, sentence, pos, entity):
+        features = self.encode_sentence(sentence, pos)
         entity_embeds = dy.average([self.word_embeddings[word] for word in entity])
         h_t = dy.concatenate([features[-1], entity_embeds])
         attention, context = self.attend(features, h_t)
-        attention = attention.vec_value()
-        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+        tirgger_pos = dy.tanh(self.tg.expr() * dy.concatenate([context, h_t]) + self.tg_bias.expr())
+        filter_vector = np.zeros(self.pos_win_size)
+        for i in pos:
+            filter_vector[i] = 1
+        filter_vector = dy.inputVector(filter_vector)
+        tirgger_pos = dy.softmax(dy.cmult(tirgger_pos, filter_vector))
+        tirgger_pos = tirgger_pos.vec_value()
+        hidden = dy.tanh(self.lb.expr() * dy.concatenate([context, h_t]) + self.lb_bias.expr())
+        out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
         res = 1 if out_vector.npvalue() > 0.05 else 0
         # probs = dy.softmax(out_vector).vec_value()
-        return attention.index(max(attention)), res, out_vector.npvalue()
+        return tirgger_pos.index(max(tirgger_pos)), res, out_vector.npvalue()
