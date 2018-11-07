@@ -2,7 +2,7 @@ import numpy as np
 import dynet_config
 dynet_config.set(
     mem=6144,
-    random_seed=1978,
+    random_seed=1,
     # autobatch=True
 )
 import dynet as dy
@@ -90,7 +90,7 @@ class LSTMLM:
         return A, context_vector/H_e.npvalue().shape[-1]
 
     def train(self, trainning_set):
-        for sentence, entity, trigger, label, pos, chars in trainning_set:
+        for sentence, eid, entity, trigger, label, pos, chars in trainning_set:
             features = self.encode_sentence(sentence, pos, chars)
             loss = []            
 
