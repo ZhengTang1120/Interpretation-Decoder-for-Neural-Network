@@ -87,19 +87,19 @@ if __name__ == '__main__':
                 chars = datapoint[-1]
                 pred_trigger, pred_label, score = (model.get_pred(sentence, pos,chars, entity))
                 # print (pred_trigger, datapoint[2], pred_label, datapoint[3], score)
-                if pred_trigger == datapoint[2]:
+                if pred_trigger == datapoint[3]:
                     i += 1
-                if pred_label == datapoint[3]:
+                if pred_label == datapoint[4]:
                     j += 1
-                if pred_trigger == datapoint[2] and pred_label == datapoint[3]:
+                if pred_trigger == datapoint[3] and pred_label == datapoint[4]:
                     k += 1
                 if pred_label != 0:
                     x += 1
-                    if pred_trigger == datapoint[2]:
+                    if pred_trigger == datapoint[3]:
                         l += 1
-                    if pred_label == datapoint[3]:
+                    if pred_label == datapoint[4]:
                         m += 1
-                    if pred_trigger == datapoint[2] and pred_label == datapoint[3]:
+                    if pred_trigger == datapoint[3] and pred_label == datapoint[4]:
                         n += 1
             print (len(test), i, j, k, x, l ,m, n)
 

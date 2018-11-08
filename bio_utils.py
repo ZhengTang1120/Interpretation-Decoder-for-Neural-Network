@@ -162,7 +162,7 @@ def prepare_data(dirname):
                         # words = words[st_pos:ed_pos]
                         pos = [i-e_pos for i in range(0, len(words))]
                         pos_lang.addSentence(pos)
-                        train.append((words, entity, entities[entity][-1], txt, None, pos))
+                        train.append((words, entity, entities[entity][-1], e_pos, None, pos))
                 input_lang.addSentence(words)
                 for w in words:
                     char_lang.addSentence(w)
@@ -203,7 +203,7 @@ def prepare_test_data(dirname):
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
                         pos = [i-e_pos for i in range(0, len(words))]
-                        test.append((words, entity, entities[entity][-1], txt, None, pos))
+                        test.append((words, entity, entities[entity][-1], e_pos, None, pos))
     return test
 
 # if __name__ == '__main__':
