@@ -33,7 +33,7 @@ if __name__ == '__main__':
                     [[char.word2index[c] for c in w] for w in datapoint[0]]))
             except:
                 print (datapoint)
-        elif random.random() > 0.8:
+        else:
             try:
                 j += 1
                 trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],datapoint[1],
