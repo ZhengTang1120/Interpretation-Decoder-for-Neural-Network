@@ -98,7 +98,7 @@ class LSTMLM:
 
             attention, context = self.attend(features)
             h_t = dy.concatenate([context, entity_embeds])
-            hidden = dy.relu(self.lb * h_t + self.lb_bias)
+            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
             out_vector = dy.softmax(self.lb2 * hidden + self.lb2_bias)
             # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
@@ -114,7 +114,7 @@ class LSTMLM:
         attention, context = self.attend(features)
         attention = attention.vec_value()
         h_t = dy.concatenate([context, entity_embeds])
-        hidden = dy.relu(self.lb * h_t + self.lb_bias)
+        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
         out_vector = dy.softmax(self.lb2 * hidden + self.lb2_bias)
         res = out_vector.vec_value()
         # probs = dy.softmax(out_vector).vec_value()
