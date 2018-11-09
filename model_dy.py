@@ -87,7 +87,7 @@ class LSTMLM:
         S = dy.transpose(S)
         A = dy.softmax(S)
         context_vector = H_e * A
-        return A, context_vector/H_e.npvalue().shape[-1]
+        return A, context_vector
 
     def train(self, trainning_set):
         for sentence, eid, entity, trigger, label, pos, chars in trainning_set:
