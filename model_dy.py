@@ -47,8 +47,8 @@ class LSTMLM:
         self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
         self.lb_bias = self.model.add_parameters((self.hidden_dim))
 
-        self.lb2 = self.model.add_parameters((1, self.hidden_dim))
-        self.lb2_bias = self.model.add_parameters((1))
+        self.lb2 = self.model.add_parameters((self.label_size, self.hidden_dim))
+        self.lb2_bias = self.model.add_parameters((self.label_size))
 
     def save(self, name):
         params = (
@@ -97,14 +97,12 @@ class LSTMLM:
             entity_embeds = dy.average([features[word] for word in entity])
 
             attention, context = self.attend(features)
-            # loss.append(-dy.log(dy.pick(attention, trigger)))
             h_t = dy.concatenate([context, entity_embeds])
-            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            hidden = dy.relu(self.lb * h_t + self.lb_bias)
+            out_vector = dy.softmax(self.lb2 * hidden + self.lb2_bias)
             # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
-            loss.append(dy.binary_log_loss(out_vector, label))
-            
+            loss.append(-dy.log(dy.pick(out_vector, label)))
             loss = dy.esum(loss)
             loss.backward()
             self.trainer.update()
@@ -116,8 +114,8 @@ class LSTMLM:
         attention, context = self.attend(features)
         attention = attention.vec_value()
         h_t = dy.concatenate([context, entity_embeds])
-        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
-        res = 1 if out_vector.npvalue() > 0.05 else 0
+        hidden = dy.relu(self.lb * h_t + self.lb_bias)
+        out_vector = dy.softmax(self.lb2 * hidden + self.lb2_bias)
+        res = out_vector.vec_value()
         # probs = dy.softmax(out_vector).vec_value()
-        return attention.index(max(attention)), res, out_vector.npvalue()
+        return attention.index(max(attention)), res.index(max(res)), out_vector.npvalue()
