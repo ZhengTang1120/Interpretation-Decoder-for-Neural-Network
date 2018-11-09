@@ -140,29 +140,33 @@ def prepare_data(dirname):
                         tlbl, trigger, entity = i
                         trigger = (starts.index(entities[trigger][1]))
                         try:
-                            ent = word_tokenize(entities[entity][-1])[0]
-                            e_pos = words.index(ent)
+                            ents = word_tokenize(entities[entity][-1])
+                            e_pos = []
+                            for ent in ents:
+                                e_pos.append(words.index(ent))
                         except:
-                            e_pos = 0
+                            e_pos = [0]
                         # st_pos = e_pos-20 if e_pos-20 > 0 else 0
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
-                        pos = [i-e_pos for i in range(0, len(words))]
+                        pos = [i-e_pos[0] for i in range(0, e_pos[0])]+[0 for i in e_pos]+[i-e_pos[-1] for i in range(e_pos[-1]+1, len(words))]
                         pos_lang.addSentence(pos)
-                        train.append((words, entity, entities[entity][-1], trigger, tlbl, pos))
+                        train.append((words, entity, e_pos, trigger, tlbl, pos))
                 if y:
                     for entity in y:
                         try:
-                                ent = word_tokenize(entities[entity][-1])[0]
-                                e_pos = words.index(ent)
+                            ents = word_tokenize(entities[entity][-1])
+                            e_pos = []
+                            for ent in ents:
+                                e_pos.append(words.index(ent))
                         except:
-                            e_pos = 0
+                            e_pos = [0]
                         # st_pos = e_pos-20 if e_pos-20 > 0 else 0
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
-                        pos = [i-e_pos for i in range(0, len(words))]
+                        pos = [i-e_pos[0] for i in range(0, e_pos[0])]+[0 for i in e_pos]+[i-e_pos[-1] for i in range(e_pos[-1]+1, len(words))]
                         pos_lang.addSentence(pos)
-                        train.append((words, entity, entities[entity][-1], e_pos, None, pos))
+                        train.append((words, entity, e_pos, e_pos, None, pos))
                 input_lang.addSentence(words)
                 for w in words:
                     char_lang.addSentence(w)
@@ -203,16 +207,16 @@ def prepare_test_data(dirname):
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
                         pos = [i-e_pos for i in range(0, len(words))]
-                        test.append((words, entity, entities[entity][-1], e_pos, None, pos))
+                        test.append((words, entity, e_pos, e_pos, None, pos))
     return test
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
     
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('datadir')
-#     args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('datadir')
+    args = parser.parse_args()
 
-#     input_lang, pos_lang, char_lang, train = prepare_data(args.datadir)
-#     i=j=0
-#     for t in train:
-#         print (t)
+    input_lang, pos_lang, char_lang, train = prepare_data(args.datadir)
+    i=j=0
+    for t in train:
+        print (t)

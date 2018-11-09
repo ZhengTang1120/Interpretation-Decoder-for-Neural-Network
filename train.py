@@ -27,7 +27,7 @@ if __name__ == '__main__':
             try:
                 i += 1
                 trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],datapoint[1],
-                    [input_lang.word2index[w] for w in word_tokenize(datapoint[2])],
+                    datapoint[2],
                     datapoint[3], 
                     input_lang.label2id[datapoint[4]], [pl1.word2index[p] for p in datapoint[-1]],
                     [[char.word2index[c] for c in w] for w in datapoint[0]]))
@@ -37,7 +37,7 @@ if __name__ == '__main__':
             try:
                 j += 1
                 trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],datapoint[1],
-                    [input_lang.word2index[w] for w in word_tokenize(datapoint[2])],
+                    datapoint[2],
                     datapoint[3], 0, [pl1.word2index[p] for p in datapoint[-1]],
                     [[char.word2index[c] for c in w] for w in datapoint[0]]))
             except:
@@ -49,7 +49,7 @@ if __name__ == '__main__':
             try:
                 i += 1
                 test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],datapoint[1],
-                    [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[2])],
+                    datapoint[2],
                     datapoint[3], 
                     input_lang.label2id[datapoint[4]], 
                     [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]],
@@ -60,7 +60,7 @@ if __name__ == '__main__':
             try:
                 j += 1
                 test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]],datapoint[1],
-                    [input_lang.word2index[w] if w in input_lang.word2index else 2 for w in word_tokenize(datapoint[2])],
+                    datapoint[2],
                     datapoint[3], 0, 
                     [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-1]],
                     [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]]))

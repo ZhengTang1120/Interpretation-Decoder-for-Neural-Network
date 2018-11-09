@@ -42,12 +42,12 @@ class LSTMLM:
             dy.VanillaLSTMBuilder,
         )
 
-        self.attention_weight = self.model.add_parameters((self.hidden_dim + self.word_embedding_dim, self.hidden_dim))
+        self.attention_weight = self.model.add_parameters((1, self.hidden_dim))
 
-        self.lb = self.model.add_parameters((self.hidden_dim//2, self.hidden_dim))
-        self.lb_bias = self.model.add_parameters((self.hidden_dim//2))
+        self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
+        self.lb_bias = self.model.add_parameters((self.hidden_dim))
 
-        self.lb2 = self.model.add_parameters((1, self.hidden_dim//2))
+        self.lb2 = self.model.add_parameters((1, self.hidden_dim))
         self.lb2_bias = self.model.add_parameters((1))
 
     def save(self, name):
@@ -81,9 +81,9 @@ class LSTMLM:
         features = [f for f in self.encoder_lstm.transduce(embeds_sent)]
         return features
 
-    def attend(self, H_e, h_t):
+    def attend(self, H_e):
         H_e =dy.concatenate_cols(H_e)
-        S = dy.transpose(h_t) * self.attention_weight * H_e
+        S = self.attention_weight * H_e
         S = dy.transpose(S)
         A = dy.softmax(S)
         context_vector = H_e * A
@@ -94,12 +94,12 @@ class LSTMLM:
             features = self.encode_sentence(sentence, pos, chars)
             loss = []            
 
-            entity_embeds = dy.average([self.word_embeddings[word] for word in entity])
+            entity_embeds = dy.average([features[word] for word in entity])
 
-            h_t = dy.concatenate([features[-1], entity_embeds])
-            attention, context = self.attend(features, h_t)
+            attention, context = self.attend(features)
             # loss.append(-dy.log(dy.pick(attention, trigger)))
-            hidden = dy.tanh(self.lb * context + self.lb_bias)
+            h_t = dy.concatenate([context, entity_embeds])
+            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
             out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
             # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
@@ -112,11 +112,11 @@ class LSTMLM:
 
     def get_pred(self, sentence, pos, chars, entity):
         features = self.encode_sentence(sentence, pos, chars)
-        entity_embeds = dy.average([self.word_embeddings[word] for word in entity])
-        h_t = dy.concatenate([features[-1], entity_embeds])
-        attention, context = self.attend(features, h_t)
+        entity_embeds = dy.average([features[word] for word in entity])
+        attention, context = self.attend(features)
         attention = attention.vec_value()
-        hidden = dy.tanh(self.lb * context + self.lb_bias)
+        h_t = dy.concatenate([context, entity_embeds])
+        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
         out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
         res = 1 if out_vector.npvalue() > 0.05 else 0
         # probs = dy.softmax(out_vector).vec_value()
