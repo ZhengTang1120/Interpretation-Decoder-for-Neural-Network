@@ -98,7 +98,9 @@ class LSTMLM:
 
             attention, context = self.attend(features)
             # loss.append(-dy.log(dy.pick(attention, trigger)))
-            h_t = dy.concatenate([context, entity_embeds])
+            attention = attention.vec_value()
+            context = features[attention.index(max(attention))]
+            h_t = dy.concatenate([v, entity_embeds])
             hidden = dy.tanh(self.lb * h_t + self.lb_bias)
             out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
             # probs = dy.softmax(out_vector)
@@ -115,6 +117,7 @@ class LSTMLM:
         entity_embeds = dy.average([features[word] for word in entity])
         attention, context = self.attend(features)
         attention = attention.vec_value()
+        context = features[attention.index(max(attention))]
         h_t = dy.concatenate([context, entity_embeds])
         hidden = dy.tanh(self.lb * h_t + self.lb_bias)
         out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
