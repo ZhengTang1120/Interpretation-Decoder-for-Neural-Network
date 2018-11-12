@@ -102,7 +102,7 @@ if __name__ == '__main__':
                 precision = both_correct/predict if predict !=0 else 0
                 recall = both_correct/197.0
                 f1 = (2*precision*recall/(precision+recall)) if (precision+recall) != 0 else 0
-                f.write("trigger accuracy: %.4f, precision: %.4f, recall: %.4f, f1: %.4f"
-                    %((trigger_correct/predict), precision, recall, f1))
+                f.write("precision: %.4f, recall: %.4f, f1: %.4f"
+                    %((precision, recall, f1))
             model.save("model%d"%(i/10))
 
