@@ -117,7 +117,7 @@ def prepare_data(dirname):
                     [id, data, text] = line.split('\t') 
                     [label, start, end] = data.split(' ')
                     entities[id] = (label, int(start), int(end), text)
-                if line.startswith('E') and "Phosphorylation" in line:
+                if line.startswith('E') and "egulation" not in line:
                     [id, data] = line.split('\t')
                     temp = data.split(' ')
                     [tlbl, trigger] = temp[0].split(':')
