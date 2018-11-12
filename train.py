@@ -33,7 +33,7 @@ if __name__ == '__main__':
                     [[char.word2index[c] for c in w] for w in datapoint[0]]))
             except:
                 print (datapoint)
-        elif random.random() > 0.7:
+        else:
             try:
                 j += 1
                 trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]],datapoint[1],
@@ -71,13 +71,10 @@ if __name__ == '__main__':
         random.shuffle(trainning_set)
         model.train(trainning_set)
         if (i % 10) == 0 :
-            i = 0
-            j = 0
-            k = 0
-            l = 0
-            n = 0
-            m = 0
-            x = 0
+            predict = 0.0
+            label_correct = 0.0
+            trigger_correct = 0.0
+            both_correct = 0.0
             random.shuffle(test)
             for datapoint in test:
                 sentence = datapoint[0]
@@ -85,21 +82,27 @@ if __name__ == '__main__':
                 entity = datapoint[2]
                 pos = datapoint[-2]
                 chars = datapoint[-1]
-                pred_trigger, pred_label, score = (model.get_pred(sentence, pos,chars, entity))
-                # print (pred_trigger, datapoint[2], pred_label, datapoint[3], score)
-                if pred_trigger == datapoint[3]:
-                    i += 1
-                if pred_label == datapoint[4]:
-                    j += 1
-                if pred_trigger == datapoint[3] and pred_label == datapoint[4]:
-                    k += 1
+                attention, pred_label, score = (model.get_pred(sentence, pos,chars, entity))
+                pred_trigger = attention.index(max(attention))
                 if pred_label != 0:
-                    x += 1
+                    predict += 1.0
                     if pred_trigger == datapoint[3]:
-                        l += 1
+                        trigger_correct += 1.0
                     if pred_label == datapoint[4]:
-                        m += 1
+                        label_correct += 1.0
                     if pred_trigger == datapoint[3] and pred_label == datapoint[4]:
-                        n += 1
-            print (len(test), i, j, k, x, l ,m, n)
+                        both_correct += 1.0
+                    with open("attention%d"%(i/10), "a") as f:
+                        f.write(' '.join([input_lang.index2word[sentence[i1]]+" %.4f"%attention[i1] for i1 in range(0, len(sentence))]))
+                        t = input_lang.index2word[sentence[datapoint[3]]] if datapoint[3]!=-1 else "None"
+                        f.write("\ttrigger: %s pred_trigger: %s\n"%(t, input_lang.index2word[sentence[pred_trigger]]))
+            with open("result%d"%(i/10), "w") as f:
+                f.write("predict: %d, trigger correct: %d, label correct: %d, both correct: %d\n"
+                    %(predict, trigger_correct, label_correct, both_correct))
+                precision = both_correct/predict if predict !=0 else 0
+                recall = both_correct/197.0
+                f1 = (2*precision*recall/(precision+recall)) if (precision+recall) != 0 else 0
+                f.write("trigger accuracy: %.4f, precision: %.4f, recall: %.4f, f1: %.4f"
+                    %((trigger_correct/predict), precision, recall, f1))
+            model.save("model%d"%(i/10))
 

@@ -117,7 +117,7 @@ def prepare_data(dirname):
                     [id, data, text] = line.split('\t') 
                     [label, start, end] = data.split(' ')
                     entities[id] = (label, int(start), int(end), text)
-                if line.startswith('E') and "egulation" not in line:
+                if line.startswith('E') and "Phosphorylation" in line:
                     [id, data] = line.split('\t')
                     temp = data.split(' ')
                     [tlbl, trigger] = temp[0].split(':')
@@ -166,7 +166,7 @@ def prepare_data(dirname):
                         # words = words[st_pos:ed_pos]
                         pos = [i-e_pos[0] for i in range(0, e_pos[0])]+[0 for i in e_pos]+[i-e_pos[-1] for i in range(e_pos[-1]+1, len(words))]
                         pos_lang.addSentence(pos)
-                        train.append((words, entity, e_pos, e_pos, None, pos))
+                        train.append((words, entity, e_pos, -1, None, pos))
                 input_lang.addSentence(words)
                 for w in words:
                     char_lang.addSentence(w)
@@ -207,7 +207,7 @@ def prepare_test_data(dirname):
                         # ed_pos = e_pos+21 if e_pos+21 < len(words) else len(words)
                         # words = words[st_pos:ed_pos]
                         pos = [i-e_pos for i in range(0, len(words))]
-                        test.append((words, entity, e_pos, e_pos, None, pos))
+                        test.append((words, entity, e_pos, -1, None, pos))
     return test
 
 if __name__ == '__main__':

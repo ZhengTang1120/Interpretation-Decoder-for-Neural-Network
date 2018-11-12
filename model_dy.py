@@ -47,15 +47,13 @@ class LSTMLM:
         self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
         self.lb_bias = self.model.add_parameters((self.hidden_dim))
 
-        self.lb2 = self.model.add_parameters((self.label_size, self.hidden_dim))
-        self.lb2_bias = self.model.add_parameters((self.label_size))
+        self.lb2 = self.model.add_parameters((1, self.hidden_dim))
+        self.lb2_bias = self.model.add_parameters((1))
 
     def save(self, name):
         params = (
             self.vocab_size, self.char_size, self.char_embedding_dim, self.char_hidden_size, 
-            self.word_embedding_dim, self.hidden_dim, 
-            self.pattern_hidden_dim, self.pattern_embeddings_dim,
-            self.rule_size, self.lstm_num_layers, self.max_rule_length
+            self.word_embedding_dim, self.hidden_dim, self.label_size, self.lstm_num_layers
         )
         # save model
         self.model.save(f'{name}.model')
@@ -97,11 +95,14 @@ class LSTMLM:
             entity_embeds = dy.average([features[word] for word in entity])
 
             attention, context = self.attend(features)
+            # loss.append(-dy.log(dy.pick(attention, trigger)))
             h_t = dy.concatenate([context, entity_embeds])
             hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-            out_vector = dy.softmax(self.lb2 * hidden + self.lb2_bias)
+            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
             # probs = dy.softmax(out_vector)
-            loss.append(-dy.log(dy.pick(out_vector, label)))
+            label = dy.scalarInput(label)
+            loss.append(dy.binary_log_loss(out_vector, label))
+            
             loss = dy.esum(loss)
             loss.backward()
             self.trainer.update()
@@ -114,7 +115,7 @@ class LSTMLM:
         attention = attention.vec_value()
         h_t = dy.concatenate([context, entity_embeds])
         hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-        out_vector = dy.softmax(self.lb2 * hidden + self.lb2_bias)
-        res = out_vector.vec_value()
+        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+        res = 1 if out_vector.npvalue() > 0.05 else 0
         # probs = dy.softmax(out_vector).vec_value()
-        return attention.index(max(attention)), res.index(max(res)), out_vector.npvalue()
+        return attention, res, out_vector.npvalue()
