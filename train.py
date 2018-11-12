@@ -103,6 +103,6 @@ if __name__ == '__main__':
                 recall = both_correct/197.0
                 f1 = (2*precision*recall/(precision+recall)) if (precision+recall) != 0 else 0
                 f.write("precision: %.4f, recall: %.4f, f1: %.4f"
-                    %((precision, recall, f1))
+                    %(precision, recall, f1))
             model.save("model%d"%(i/10))
 
