@@ -89,7 +89,6 @@ class LSTMLM:
 
     def train(self, trainning_set):
         for sentence, eid, entity, trigger, label, pos, chars in trainning_set:
-            sentence.append(1)
             features = self.encode_sentence(sentence, pos, chars)
             loss = []            
 
