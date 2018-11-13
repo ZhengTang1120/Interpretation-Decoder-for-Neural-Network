@@ -89,6 +89,14 @@ def refine_words(words, e):
         return new_words
     return words
 
+def token_span(entity, starts):
+    res = []
+    offset = entity[1]
+    for w in word_tokenize(entity[-1]):
+        res.append(starts.index(offset))
+        offset += len(w)
+    return res
+
 def prepare_data(dirname):
     maxl = 0
     input_lang = Lang("input")
@@ -140,10 +148,7 @@ def prepare_data(dirname):
                         tlbl, trigger, entity = i
                         trigger = (starts.index(entities[trigger][1]))
                         try:
-                            ents = word_tokenize(entities[entity][-1])
-                            e_pos = []
-                            for ent in ents:
-                                e_pos.append(words.index(ent))
+                            e_pos = token_span(entities[entity],starts)
                         except:
                             e_pos = [0]
                         # st_pos = e_pos-20 if e_pos-20 > 0 else 0
@@ -155,10 +160,7 @@ def prepare_data(dirname):
                 if y:
                     for entity in y:
                         try:
-                            ents = word_tokenize(entities[entity][-1])
-                            e_pos = []
-                            for ent in ents:
-                                e_pos.append(words.index(ent))
+                            e_pos = token_span(entities[entity], starts)
                         except:
                             e_pos = [0]
                         # st_pos = e_pos-20 if e_pos-20 > 0 else 0
@@ -199,8 +201,7 @@ def prepare_test_data(dirname):
                 if y:
                     for entity in y:
                         try:
-                                ent = word_tokenize(entities[entity][-1])[0]
-                                e_pos = words.index(ent)
+                            e_pos = token_span(entities[entity], starts)
                         except:
                             e_pos = 0
                         # st_pos = e_pos-20 if e_pos-20 > 0 else 0
@@ -217,6 +218,23 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     input_lang, pos_lang, char_lang, train = prepare_data(args.datadir)
-    i=j=0
+    offset_dict = dict()
     for t in train:
-        print (t)
+        if t[3] != -1:
+            try:
+                offset_dict[t[-1][t[3]]] += 1
+            except KeyError:
+                offset_dict[t[-1][t[3]]] = 1
+    with open("histogram.tsv", "w") as f:
+        for i in range(min(offset_dict.keys()), max(offset_dict.keys())+1):
+            l = offset_dict[i] if i in offset_dict else 0
+            f.write("%d\t%d\n"%(i,l)) 
+
+
+
+
+
+
+
+
+

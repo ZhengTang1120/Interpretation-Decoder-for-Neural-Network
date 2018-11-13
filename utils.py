@@ -52,7 +52,7 @@ def get_rules(folder):
         with open(root+'.yml') as stream:
             docs = yaml.load_all(stream)
             for doc in docs:
-                for rule in doc['rules']:
+                for rule in doc:
                     rules[rule['name']] = rule['pattern']
     return rules
 
