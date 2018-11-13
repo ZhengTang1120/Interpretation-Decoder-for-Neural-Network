@@ -75,15 +75,15 @@ if __name__ == '__main__':
             label_correct = 0.0
             trigger_correct = 0.0
             both_correct = 0.0
-            random.shuffle(test)
             for datapoint in test:
                 sentence = datapoint[0]
+                sentence.append(1)
                 eid = datapoint[1]
                 entity = datapoint[2]
                 pos = datapoint[-2]
                 chars = datapoint[-1]
                 attention, pred_label, score = (model.get_pred(sentence, pos,chars, entity))
-                pred_trigger = attention.index(max(attention))
+                pred_trigger = attention.index(max(attention)) if attention.index(max(attention)) != len(attention)-1 else -1
                 if pred_label != 0:
                     predict += 1.0
                     if pred_trigger == datapoint[3]:
@@ -95,6 +95,7 @@ if __name__ == '__main__':
                     with open("attention%d"%(i/10), "a") as f:
                         f.write(' '.join([input_lang.index2word[sentence[i1]]+" %.4f"%attention[i1] for i1 in range(0, len(sentence))]))
                         t = input_lang.index2word[sentence[datapoint[3]]] if datapoint[3]!=-1 else "None"
+                        f.write("\t"+' '.join([input_lang.index2word[sentence[e]] for e in entity]))
                         f.write("\ttrigger: %s pred_trigger: %s\n"%(t, input_lang.index2word[sentence[pred_trigger]]))
             with open("result%d"%(i/10), "w") as f:
                 f.write("predict: %d, trigger correct: %d, label correct: %d, both correct: %d\n"

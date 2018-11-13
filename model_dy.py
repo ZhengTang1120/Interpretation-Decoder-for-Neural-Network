@@ -89,17 +89,19 @@ class LSTMLM:
 
     def train(self, trainning_set):
         for sentence, eid, entity, trigger, label, pos, chars in trainning_set:
+            sentence.append(1)
             features = self.encode_sentence(sentence, pos, chars)
             loss = []            
 
             entity_embeds = dy.average([features[word] for word in entity])
 
             attention, context = self.attend(features)
-            # loss.append(-dy.log(dy.pick(attention, trigger)))
-            h_t = dy.concatenate([context, entity_embeds])
+            attention = attention.vec_value()
+            pred_trigger = attention.index(max(attention))
+            # loss.append(dy.log(dy.pick(attention, trigger)))
+            h_t = dy.concatenate([features[pred_trigger], entity_embeds])
             hidden = dy.tanh(self.lb * h_t + self.lb_bias)
             out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
-            # probs = dy.softmax(out_vector)
             label = dy.scalarInput(label)
             loss.append(dy.binary_log_loss(out_vector, label))
             
@@ -113,7 +115,8 @@ class LSTMLM:
         entity_embeds = dy.average([features[word] for word in entity])
         attention, context = self.attend(features)
         attention = attention.vec_value()
-        h_t = dy.concatenate([context, entity_embeds])
+        pred_trigger = attention.index(max(attention))
+        h_t = dy.concatenate([features[pred_trigger], entity_embeds])
         hidden = dy.tanh(self.lb * h_t + self.lb_bias)
         out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
         res = 1 if out_vector.npvalue() > 0.05 else 0
