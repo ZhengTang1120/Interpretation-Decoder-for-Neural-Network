@@ -17,10 +17,8 @@ if __name__ == '__main__':
 
     input_lang, pl1, char, raw_train = prepare_data(args.datadir)
     input_lang, pl1, char, rule_lang, raw_train = parse_json_data(input_lang, pl1, char, raw_train)
-    print (input_lang.n_words, pl1.n_words, char.n_words, rule_lang.n_words)
     input2_lang, pl2, char2, raw_test = prepare_data(args.dev_datadir)
     embeds = load_embeddings("embeddings_november_2016.txt", input_lang)
-    print (embeds.shape)
     model = LSTMLM(input_lang.n_words, char.n_words, 50, 50, 100, 200, pl1.n_words, 5, len(input_lang.labels), 
         100, 200, rule_lang.n_words, 200, 2, embeds)
     trainning_set = []
@@ -90,8 +88,8 @@ if __name__ == '__main__':
                 entity = datapoint[2]
                 pos = datapoint[-3]
                 chars = datapoint[-2]
-                attention, pred_label, score, rule = (model.get_pred(sentence, pos,chars, entity))
-                pred_trigger = attention.index(max(attention)) if attention.index(max(attention)) != len(attention)-1 else -1
+                pred_trigger, pred_label, score, rule = (model.get_pred(sentence, pos,chars, entity))
+                pred_trigger = pred_trigger if pred_trigger != len(sentence)-1 else -1
                 if pred_label != 0:
                     predict += 1.0
                     if pred_trigger == datapoint[3]:

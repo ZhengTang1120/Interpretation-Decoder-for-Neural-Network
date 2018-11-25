@@ -14,7 +14,8 @@ class TNLM:
 
     def __init__(self, vocab_size, char_size, char_embedding_dim, char_hidden_size,
         word_embedding_dim, hidden_dim, pos_size, pos_embeddings_size, label_size,
-        pattern_hidden_dim, pattern_embeddings_dim, rule_size, max_rule_length, pretrained):
+        pattern_hidden_dim, pattern_embeddings_dim, rule_size, max_rule_length, 
+        lstm_num_layers, pretrained):
         self.vocab_size = vocab_size
         self.char_size = char_size
         self.word_embedding_dim = word_embedding_dim
@@ -31,6 +32,7 @@ class TNLM:
         self.pattern_embeddings_dim = pattern_embeddings_dim
         self.rule_size = rule_size
         self.max_rule_length = max_rule_length
+        self.lstm_num_layers = lstm_num_layers
         if np.any(self.pretrained):
             self.word_embeddings = self.model.lookup_parameters_from_numpy(self.pretrained)
         else:
@@ -76,12 +78,14 @@ class TNLM:
         self.lb2 = self.model.add_parameters((1, self.hidden_dim))
         self.lb2_bias = self.model.add_parameters((1))
 
+        self.self_attention_weight = self.model.add_parameters((1, self.hidden_dim))
+
     def save(self, name):
         params = (
             self.vocab_size, self.char_size, self.char_embedding_dim, self.char_hidden_size, 
             self.word_embedding_dim, self.hidden_dim, self.pos_size, self.pos_embeddings_size,
             self.label_size, self.pattern_hidden_dim, self.pattern_embeddings_dim, 
-            self.rule_size, self.max_rule_length, self.pretrained
+            self.rule_size, self.max_rule_length, self.lstm_num_layers, self.pretrained
         )
         # save model
         self.model.save(f'{name}.model')
@@ -104,26 +108,43 @@ class TNLM:
     def encode_sentence(self, sentence, pos, chars):
         embeds_sent = [dy.concatenate([self.word_embeddings[sentence[i]], self.char_encode(chars[i]), self.pos_embeddings[pos[i]]]) 
          for i in range(len(sentence))]
-        embeds_sent = dy.concatenate_cols(embeds_sent)
-        Q = self.weight_eq * embed
-        K = self.weight_ek * embed
-        V = self.weight_ev * embed
-        features = dy.cmult(dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden * 2)), V)
-        features = self.eff * features + self.eff_bias
+        embeds = dy.concatenate_cols(embeds_sent)
+        scores = []
+        for embed in embeds_sent:
+            q = self.weight_eq.expr() * embed
+            k = self.weight_ek.expr() * embed
+            scores.append(q*dy.transpose(k)/math.sqrt(self.hidden_dim * 2))
+        scores = dy.softmax(dy.concatenate_cols(scores))
+        V = self.weight_ev.expr() * embeds
+        features = dy.cmult(scores, V)
+        features = self.eff.expr() * features + self.eff_bias.expr()
         return features
+
+    def self_attend(self, H_e):
+        H_e = dy.concatenate_cols(H_e)
+        S = self.self_attention_weight.expr() * H_e
+        S = dy.transpose(S)
+        A = dy.softmax(S)
+        context_vector = H_e * A
+        return A, context_vector
 
     def decoder(features, pres):
         encode = dy.concatenate_cols(features)
-        decoded = [self.pattern_embeddings[p] for pres]
-        decoded = dy.concatenate_cols(pres)
-        Q = self.weight_dq * decoded
-        K = self.weight_dk * decoded
-        V = self.weight_dv * decoded
-        Q2 = self.weight_q * (dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden * 2)) * V)
-        K2 = self.weight_k * encode
-        V2 = self.weight_v * encode
-        output = dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden * 2)) * V
-        output = self.dff * output + self.dff_bias
+        decoded = [self.pattern_embeddings[p] for p in pres]
+        decoded2 = dy.concatenate_cols(pres)
+        scores = []
+        for embed in decoded:
+            q = self.weight_eq.expr() * embed
+            k = self.weight_ek.expr() * embed
+            scores.append(q*dy.transpose(k)/math.sqrt(self.hidden_dim * 2))
+        scores = dy.softmax(dy.concatenate_cols(scores))
+        V = self.weight_dv.expr() * decoded2
+        Q2 = self.dff.expr() * (scores * V) + self.dff_bias.expr()
+        Q2 = self.weight_q.expr() * Q2
+        K2 = self.weight_k.expr() * encode
+        V2 = self.weight_v.expr() * encode
+        output = dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden_dim * 2)) * V
+        output = self.pt.expr() * output + self.pt_bias.expr()
         return dy.softmax(output)
 
     def train(self, trainning_set):
@@ -138,8 +159,8 @@ class TNLM:
             ty.set([0 if i!=trigger else 1 for i in range(len(sentence))])
             loss.append(dy.binary_log_loss(dy.reshape(attention,(len(sentence),)), ty))
             h_t = dy.concatenate([context, entity_embeds])
-            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            hidden = dy.tanh(self.lb.expr() * h_t + self.lb_bias.expr())
+            out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
             label = dy.scalarInput(label)
             loss.append(dy.binary_log_loss(out_vector, label))
 
@@ -161,12 +182,12 @@ class TNLM:
         attention = attention.vec_value()
         # pred_trigger = attention.index(max(attention))
         h_t = dy.concatenate([context, entity_embeds])
-        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+        hidden = dy.tanh(self.lb.expr() * h_t + self.lb_bias.expr())
+        out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
         res = 1 if out_vector.npvalue() > 0.0005 else 0
         rule = [0]
         while rule[-1] != 0:
             probs = self.decoder(features, rule)
             rule.append(probs.index(max(probs)))
 
-        return res, out_vector.npvalue(), rule[1:]
+        return attention, res, out_vector.npvalue(), rule[1:]

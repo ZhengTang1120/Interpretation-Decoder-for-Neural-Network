@@ -54,7 +54,7 @@ class LSTMLM:
             dy.VanillaLSTMBuilder,
         )
 
-        self.self_attention_weight = self.model.add_parameters((1, self.hidden_dim))
+        self.self_attention_weight = self.model.add_parameters((self.hidden_dim, self.hidden_dim))
         self.attention_weight = self.model.add_parameters((self.pattern_hidden_dim, self.hidden_dim))
 
         self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
@@ -105,9 +105,9 @@ class LSTMLM:
         features = [f for f in self.encoder_lstm.transduce(embeds_sent)]
         return features
 
-    def self_attend(self, H_e):
+    def self_attend(self, H_e, entity):
         H_e = dy.concatenate_cols(H_e)
-        S = self.self_attention_weight * H_e
+        S = dy.transpose(entity) * self.self_attention_weight * H_e
         S = dy.transpose(S)
         A = dy.softmax(S)
         context_vector = H_e * A
@@ -128,15 +128,25 @@ class LSTMLM:
 
             entity_embeds = features[entity]
 
-            attention, context = self.self_attend(features)
-            ty = dy.vecInput(len(sentence))
-            ty.set([0 if i!=trigger else 1 for i in range(len(sentence))])
-            loss.append(dy.binary_log_loss(dy.reshape(attention,(len(sentence),)), ty))
-            h_t = dy.concatenate([context, entity_embeds])
-            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            # attention, context = self.self_attend(features, entity_embeds)
+            # ty = dy.vecInput(len(sentence))
+            # ty.set([0 if i!=trigger else 1 for i in range(len(sentence))])
+            # loss.append(dy.binary_log_loss(dy.reshape(attention,(len(sentence),)), ty))
+            # h_t = dy.concatenate([context, entity_embeds])
+            # hidden = dy.tanh(self.lb * h_t + self.lb_bias)
+            # out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            # label = dy.scalarInput(label)
+            # loss.append(dy.binary_log_loss(out_vector, label))
+
+            preds = list()
+            for w in features:
+                h_t = dy.concatenate([w, entity_embeds])
+                hidden = dy.tanh(self.lb * h_t + self.lb_bias)
+                out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+                preds.append(out_vector)
+            max_pred = preds[[p.scalar_value() for p in preds].index(max([p.scalar_value() for p in preds]))]
             label = dy.scalarInput(label)
-            loss.append(dy.binary_log_loss(out_vector, label))
+            loss.append(dy.binary_log_loss(max_pred, label))
 
             # Get decoding losses
             last_output_embeddings = self.pattern_embeddings[0]
@@ -176,13 +186,21 @@ class LSTMLM:
     def get_pred(self, sentence, pos, chars, entity):
         features = self.encode_sentence(sentence, pos, chars)
         entity_embeds = features[entity]
-        attention, context = self.self_attend(features)
-        attention = attention.vec_value()
-        # pred_trigger = attention.index(max(attention))
-        h_t = dy.concatenate([context, entity_embeds])
-        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
-        res = 1 if out_vector.npvalue() > 0.0005 else 0
+        # attention, context = self.self_attend(features)
+        # attention = attention.vec_value()
+        # # pred_trigger = attention.index(max(attention))
+        # h_t = dy.concatenate([context, entity_embeds])
+        # hidden = dy.tanh(self.lb * h_t + self.lb_bias)
+        # out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+        preds = list()
+        for w in features:
+            h_t = dy.concatenate([w, entity_embeds])
+            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
+            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            preds.append(out_vector.scalar_value())
+        max_pred = max(preds)
+        trigger = preds.index(max(preds))
+        res = 1 if max_pred > 0.0005 else 0
         rule = self.decode(features)
         # probs = dy.softmax(out_vector).vec_value()
-        return attention, res, out_vector.npvalue(), rule
+        return trigger, res, out_vector.npvalue(), rule

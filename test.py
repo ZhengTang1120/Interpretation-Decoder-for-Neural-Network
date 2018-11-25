@@ -58,8 +58,8 @@ if __name__ == '__main__':
         entity = datapoint[2]
         pos = datapoint[-3]
         chars = datapoint[-2]
-        attention, pred_label, score, rule = (model.get_pred(sentence, pos,chars, entity))
-        pred_trigger = attention.index(max(attention)) if attention.index(max(attention)) != len(attention)-1 else -1
+        pred_trigger, pred_label, score, rule = (model.get_pred(sentence, pos,chars, entity))
+        pred_trigger = pred_trigger if pred_trigger != len(sentence)-1 else -1
         if pred_label != 0:
             predict += 1.0
             if pred_trigger == datapoint[3]:
