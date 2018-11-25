@@ -6,15 +6,15 @@ dynet_config.set(
     # autobatch=True
 )
 import dynet as dy
+import math
 
 import pickle
 
-class LSTMLM:
+class TNLM:
 
     def __init__(self, vocab_size, char_size, char_embedding_dim, char_hidden_size,
         word_embedding_dim, hidden_dim, pos_size, pos_embeddings_size, label_size,
-        pattern_hidden_dim, pattern_embeddings_dim, rule_size, max_rule_length,  
-        lstm_num_layers, pretrained):
+        pattern_hidden_dim, pattern_embeddings_dim, rule_size, max_rule_length, pretrained):
         self.vocab_size = vocab_size
         self.char_size = char_size
         self.word_embedding_dim = word_embedding_dim
@@ -23,7 +23,6 @@ class LSTMLM:
         self.model = dy.Model()
         self.trainer = dy.SimpleSGDTrainer(self.model)
         self.label_size = label_size
-        self.lstm_num_layers = lstm_num_layers
         self.char_hidden_size = char_hidden_size
         self.pos_size = pos_size
         self.pos_embeddings_size = pos_embeddings_size
@@ -46,40 +45,43 @@ class LSTMLM:
             self.model,
             dy.VanillaLSTMBuilder,
         )
-        self.encoder_lstm = dy.BiRNNBuilder(
-            self.lstm_num_layers,
-            self.word_embedding_dim + self.char_hidden_size + self.pos_embeddings_size,
-            self.hidden_dim,
-            self.model,
-            dy.VanillaLSTMBuilder,
-        )
 
-        self.self_attention_weight = self.model.add_parameters((1, self.hidden_dim))
-        self.attention_weight = self.model.add_parameters((self.pattern_hidden_dim, self.hidden_dim))
+        self.weight_eq = self.model.add_parameters((2 * self.hidden_dim, 
+            self.word_embedding_dim + self.char_hidden_size + self.pos_embeddings_size))
+        self.weight_ek = self.model.add_parameters((2 * self.hidden_dim, 
+            self.word_embedding_dim + self.char_hidden_size + self.pos_embeddings_size))
+        self.weight_ev = self.model.add_parameters((2 * self.hidden_dim, 
+            self.word_embedding_dim + self.char_hidden_size + self.pos_embeddings_size))
+        self.eff = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
+        self.eff_bias = self.model.add_parameters((self.hidden_dim))
+
+        self.pattern_embeddings = self.model.add_lookup_parameters((self.rule_size, self.pattern_embeddings_dim))
+
+        self.weight_dq = self.model.add_parameters((2 * self.hidden_dim, self.pattern_embeddings_dim))
+        self.weight_dk = self.model.add_parameters((2 * self.hidden_dim, self.pattern_embeddings_dim))
+        self.weight_dv = self.model.add_parameters((2 * self.hidden_dim, self.pattern_embeddings_dim))
+
+        self.dff = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
+        self.dff_bias = self.model.add_parameters((self.hidden_dim))
+
+        self.weight_q = self.model.add_parameters((self.pattern_hidden_dim, self.hidden_dim))
+        self.weight_k = self.model.add_parameters((self.pattern_hidden_dim, self.hidden_dim))
+        self.weight_v = self.model.add_parameters((self.pattern_hidden_dim, self.hidden_dim))
+        
+        self.pt = self.model.add_parameters((self.rule_size, self.pattern_hidden_dim))
+        self.pt_bias = self.model.add_parameters((self.rule_size))
 
         self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
         self.lb_bias = self.model.add_parameters((self.hidden_dim))
-
         self.lb2 = self.model.add_parameters((1, self.hidden_dim))
         self.lb2_bias = self.model.add_parameters((1))
-
-        self.pattern_embeddings = self.model.add_lookup_parameters((self.rule_size, self.pattern_embeddings_dim))
-        self.decoder_lstm = dy.LSTMBuilder(
-            self.lstm_num_layers,
-            self.hidden_dim + self.pattern_embeddings_dim,
-            self.pattern_hidden_dim,
-            self.model,
-        )
-        self.pt = self.model.add_parameters((self.rule_size, self.pattern_hidden_dim + self.hidden_dim))
-        self.pt_bias = self.model.add_parameters((self.rule_size))
 
     def save(self, name):
         params = (
             self.vocab_size, self.char_size, self.char_embedding_dim, self.char_hidden_size, 
             self.word_embedding_dim, self.hidden_dim, self.pos_size, self.pos_embeddings_size,
             self.label_size, self.pattern_hidden_dim, self.pattern_embeddings_dim, 
-            self.rule_size, self.max_rule_length,
-            self.lstm_num_layers, self.pretrained
+            self.rule_size, self.max_rule_length, self.pretrained
         )
         # save model
         self.model.save(f'{name}.model')
@@ -102,24 +104,27 @@ class LSTMLM:
     def encode_sentence(self, sentence, pos, chars):
         embeds_sent = [dy.concatenate([self.word_embeddings[sentence[i]], self.char_encode(chars[i]), self.pos_embeddings[pos[i]]]) 
          for i in range(len(sentence))]
-        features = [f for f in self.encoder_lstm.transduce(embeds_sent)]
+        embeds_sent = dy.concatenate_cols(embeds_sent)
+        Q = self.weight_eq * embed
+        K = self.weight_ek * embed
+        V = self.weight_ev * embed
+        features = dy.cmult(dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden * 2)), V)
+        features = self.eff * features + self.eff_bias
         return features
 
-    def self_attend(self, H_e):
-        H_e = dy.concatenate_cols(H_e)
-        S = self.self_attention_weight * H_e
-        S = dy.transpose(S)
-        A = dy.softmax(S)
-        context_vector = H_e * A
-        return A, context_vector
-
-    def attend(self, H_e, h_t):
-        H_e =dy.concatenate_cols(H_e)
-        S = dy.transpose(h_t) * self.attention_weight * H_e
-        S = dy.transpose(S)
-        A = dy.softmax(S)
-        context_vector = H_e * A
-        return context_vector
+    def decoder(features, pres):
+        encode = dy.concatenate_cols(features)
+        decoded = [self.pattern_embeddings[p] for pres]
+        decoded = dy.concatenate_cols(pres)
+        Q = self.weight_dq * decoded
+        K = self.weight_dk * decoded
+        V = self.weight_dv * decoded
+        Q2 = self.weight_q * (dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden * 2)) * V)
+        K2 = self.weight_k * encode
+        V2 = self.weight_v * encode
+        output = dy.softmax(Q*dy.transpose(K)/math.sqrt(self.hidden * 2)) * V
+        output = self.dff * output + self.dff_bias
+        return dy.softmax(output)
 
     def train(self, trainning_set):
         for sentence, eid, entity, trigger, label, pos, chars, rule in trainning_set:
@@ -138,40 +143,16 @@ class LSTMLM:
             label = dy.scalarInput(label)
             loss.append(dy.binary_log_loss(out_vector, label))
 
-            # Get decoding losses
-            last_output_embeddings = self.pattern_embeddings[0]
-            s = self.decoder_lstm.initial_state().add_input(dy.concatenate([dy.vecInput(self.hidden_dim), last_output_embeddings]))
+            pres = [0]
             for pattern in rule:
-                h_t = s.output()
-                context = self.attend(features, h_t)
-                out_vector = self.pt * dy.concatenate([context, h_t]) + self.pt_bias
-                probs = dy.softmax(out_vector)
+                probs = self.decoder(features, pres)
                 loss.append(-dy.log(dy.pick(probs, pattern)))
-                last_output_embeddings = self.pattern_embeddings[pattern]
-                s = s.add_input(dy.concatenate([context, last_output_embeddings]))
-            
+                pres.append(pattern)
+
             loss = dy.esum(loss)
             loss.backward()
             self.trainer.update()
             dy.renew_cg()
-
-    def decode(self, features):
-        last_output_embeddings = self.pattern_embeddings[0]
-        s = self.decoder_lstm.initial_state().add_input(dy.concatenate([dy.vecInput(self.hidden_dim), last_output_embeddings]))
-        out = []
-        for i in range(self.max_rule_length):
-            h_t = s.output()
-            context = self.attend(features, h_t)
-            out_vector = self.pt * dy.concatenate([context, h_t]) + self.pt_bias
-            probs = dy.softmax(out_vector).vec_value()
-            last_output = probs.index(max(probs))
-            last_output_embeddings = self.pattern_embeddings[last_output]
-            s = s.add_input(dy.concatenate([context, last_output_embeddings]))
-            if last_output != 0:
-                out.append(last_output)
-            else:
-                return out
-        return out
 
     def get_pred(self, sentence, pos, chars, entity):
         features = self.encode_sentence(sentence, pos, chars)
@@ -183,6 +164,9 @@ class LSTMLM:
         hidden = dy.tanh(self.lb * h_t + self.lb_bias)
         out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
         res = 1 if out_vector.npvalue() > 0.0005 else 0
-        rule = self.decode(features)
-        # probs = dy.softmax(out_vector).vec_value()
-        return attention, res, out_vector.npvalue(), rule
+        rule = [0]
+        while rule[-1] != 0:
+            probs = self.decoder(features, rule)
+            rule.append(probs.index(max(probs)))
+
+        return res, out_vector.npvalue(), rule[1:]

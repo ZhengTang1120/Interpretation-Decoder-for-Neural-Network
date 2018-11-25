@@ -15,9 +15,9 @@ simple_events = ["Gene_expression", "Transcription", "Protein_catabolism", "Loca
 class Lang:
     def __init__(self, name):
         self.name = name
-        self.word2index = {"EOS":0,"UNK":1,"THEME":2}
-        self.index2word = {0: "EOS", 1:"UNK", 2:"THEME"}
-        self.n_words = 3  # Count SOS and EOS
+        self.word2index = {"EOS":1,"UNK":2,"THEME":3}
+        self.index2word = {1: "EOS", 2:"UNK", 3:"THEME"}
+        self.n_words = 4  # Count SOS and EOS
         self.labels = ["NoRel"]
         self.label2id = {"NoRel":0}
 
@@ -46,7 +46,7 @@ def load_embeddings(file, lang):
             vector = np.array([float(i) for i in line_split[1:]])
             embedding_size = vector.shape[0]
             emb_dict[word] = vector
-    for i in range(3, lang.n_words):
+    for i in range(5, lang.n_words):
         base = math.sqrt(6/embedding_size)
         word = lang.index2word[i]
         try:
@@ -56,8 +56,8 @@ def load_embeddings(file, lang):
         if np.any(emb_matrix):
             emb_matrix = np.vstack((emb_matrix, vector))
         else:
-            emb_matrix = np.random.uniform(-base,base,(4, embedding_size))
-            emb_matrix[3] = vector
+            emb_matrix = np.random.uniform(-base,base,(5, embedding_size))
+            emb_matrix[4] = vector
     return emb_matrix
 
 def sanitizeWord(w):
