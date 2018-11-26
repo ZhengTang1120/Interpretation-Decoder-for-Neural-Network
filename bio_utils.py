@@ -114,13 +114,13 @@ def sentence_tokens(sentence, offset):
     return words, starts, ends
 
 def get_trigger(s, e, entities, phosphorylations):
-    for tlbl, trigger, entity in phosphorylations:
+    for tlbl, trigger, entity, rule in phosphorylations:
         if entities[trigger][2] >= s and entities[trigger][1] <= e:
-            yield tlbl, trigger, entity
+            yield tlbl, trigger, entity, rule
 
 def check_entity(e, x):
     for p in x:
-        if e == p[-1]:
+        if e == p[-2]:
             return False
     return True
 
@@ -164,7 +164,13 @@ def replace_protein(words, entities, starts, proteins):
             res.append("$"+p)
     return res
 
-def prepare_data(dirname):
+def prepare_data(dirname, valids=None):
+    if valids:
+        vj = json.load(open(valids))
+    else:
+        vj = dict()
+    with open("rules/raw.json") as f:
+        rules = json.load(f)
     maxl = 0
     input_lang = Lang("input")
     pos_lang = Lang("position")
@@ -197,8 +203,12 @@ def prepare_data(dirname):
                     temp = data.split(' ')
                     [tlbl, trigger] = temp[0].split(':')
                     [elbl, entity] = temp[1].split(':')
-                    if ((tlbl, trigger, entity)) not in phosphorylations:
-                        phosphorylations.append((tlbl, trigger, entity))
+                    if valids and root+"/"+id in vj:
+                        rule = (vj[root+"/"+id])
+                    else:
+                        rule = "null"
+                    if ((tlbl, trigger, entity, rule)) not in phosphorylations:
+                        phosphorylations.append((tlbl, trigger, entity, rule))
                     if tlbl not in input_lang.labels:
                         input_lang.label2id[tlbl] = len(input_lang.labels)
                         input_lang.labels.append(tlbl)
@@ -222,7 +232,11 @@ def prepare_data(dirname):
                 # new_words = temp
                 for res in x:
                     try:
-                        tlbl, trigger, entity = res
+                        tlbl, trigger, entity, rule = res
+                        if rule in rules:
+                            rule = word_tokenize(rules[rule])
+                        else:
+                            rule = []
                         new_words = replace_protein(words, entities, starts, [trigger, entity])
                         temp = []
                         for i,w in enumerate(new_words):
@@ -244,7 +258,7 @@ def prepare_data(dirname):
                         res = new_words[st_pos: ed_pos]#["OTHER" if w.startswith("$T") and w != "$"+entity else w for w in new_words[st_pos: ed_pos]]
                         res[e_pos-st_pos] = "THEME"
                         input_lang.addSentence(res)
-                        train.append((res, entity, e_pos-st_pos, trigger_pos, tlbl, pos, []))
+                        train.append((res, entity, e_pos-st_pos, trigger_pos, tlbl, pos, rule))
                     except:
                         continue
                         # print (words)
@@ -325,11 +339,12 @@ def parse_json_data(input_lang, pos_lang, char_lang, train):
 #     parser = argparse.ArgumentParser()
 #     parser.add_argument('datadir')
 #     args = parser.parse_args()
-
-#     input_lang, pos_lang, char_lang, train = prepare_data(args.datadir)
-#     input_lang, pos_lang, char_lang, rule_lang, train = parse_json_data(input_lang, pos_lang, char_lang, train)
-#     # print (load_embeddings("embeddings_november_2016.txt", input_lang))
-#     offset_dict = dict()
+#     print ("///")
+#     input_lang, pos_lang, char_lang, train = prepare_data(args.datadir, "valids.json")
+#     print (len(train))
+# # #     input_lang, pos_lang, char_lang, rule_lang, train = parse_json_data(input_lang, pos_lang, char_lang, train)
+# # #     # print (load_embeddings("embeddings_november_2016.txt", input_lang))
+# # #     offset_dict = dict()
 #     for t in train:
 #         if t[3] != -1:
 #             print (t[-1])
