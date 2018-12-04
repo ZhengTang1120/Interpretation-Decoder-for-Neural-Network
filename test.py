@@ -63,32 +63,32 @@ if __name__ == '__main__':
         entity = datapoint[2]
         pos = datapoint[-3]
         chars = datapoint[-2]
-        attention, pred_label, score, rule = (model.get_pred(sentence, pos,chars, entity))
-        pred_trigger = attention.index(max(attention)) if attention.index(max(attention)) != len(attention)-1 else -1
-        if pred_label != 0:
-            predict += 1.0
-            if pred_trigger == datapoint[3]:
-                trigger_correct += 1.0
-            if pred_label == datapoint[4]:
-                label_correct += 1.0
-            if pred_trigger == datapoint[3] and pred_label == datapoint[4]:
-                both_correct += 1.0
+        rule = (model.get_pred(sentence, pos,chars, entity))
+        # pred_trigger = attention.index(max(attention)) if attention.index(max(attention)) != len(attention)-1 else -1
+        # if pred_label != 0:
+        #     predict += 1.0
+        #     if pred_trigger == datapoint[3]:
+        #         trigger_correct += 1.0
+        #     if pred_label == datapoint[4]:
+        #         label_correct += 1.0
+        #     if pred_trigger == datapoint[3] and pred_label == datapoint[4]:
+        #         both_correct += 1.0
             # with open("attention%d"%(i/10), "a") as f:
             #     f.write(' '.join([input_lang.index2word[sentence[i1]]+" %.4f"%attention[i1] for i1 in range(0, len(sentence))]))
             #     t = input_lang.index2word[sentence[datapoint[3]]] if datapoint[3]!=-1 else "None"
             #     f.write("\t"+' '.join([input_lang.index2word[sentence[e]] for e in entity]))
             #     f.write("\ttrigger: %s pred_trigger: %s\n"%(t, input_lang.index2word[sentence[pred_trigger]]))
-            if datapoint[-1]:
-                references.append([datapoint[-1]])
-                candidates.append([rule_lang.index2word[p] for p in rule])
-            with open("rules-1", "a") as f:
-                f.write(' '.join([rule_lang.index2word[p] for p in rule])+"\n")
-    with open("result", "w") as f:
-        f.write("predict: %d, trigger correct: %d, label correct: %d, both correct: %d\n"
-            %(predict, trigger_correct, label_correct, both_correct))
-        precision = label_correct/predict if predict !=0 else 0
-        recall = label_correct/197.0
-        f1 = (2*precision*recall/(precision+recall)) if (precision+recall) != 0 else 0
-        bleu = corpus_bleu(references, candidates)
-        f.write("precision: %.4f, recall: %.4f, f1: %.4f bleu: %.4f"
-            %(precision, recall, f1, bleu))
+            # if datapoint[-1]:
+            #     references.append([datapoint[-1]])
+            #     candidates.append([rule_lang.index2word[p] for p in rule])
+        with open("rules-1", "a") as f:
+            f.write(' '.join([rule_lang.index2word[p] for p in rule])+"\n")
+    # with open("result", "w") as f:
+    #     f.write("predict: %d, trigger correct: %d, label correct: %d, both correct: %d\n"
+    #         %(predict, trigger_correct, label_correct, both_correct))
+    #     precision = label_correct/predict if predict !=0 else 0
+    #     recall = label_correct/197.0
+    #     f1 = (2*precision*recall/(precision+recall)) if (precision+recall) != 0 else 0
+    #     bleu = corpus_bleu(references, candidates)
+    #     f.write("precision: %.4f, recall: %.4f, f1: %.4f bleu: %.4f"
+    #         %(precision, recall, f1, bleu))

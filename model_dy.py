@@ -126,17 +126,17 @@ class LSTMLM:
             features = self.encode_sentence(sentence, pos, chars)
             loss = []            
 
-            entity_embeds = features[entity]
+            # entity_embeds = features[entity]
 
-            attention, context = self.self_attend(features)
-            ty = dy.vecInput(len(sentence))
-            ty.set([0 if i!=trigger else 1 for i in range(len(sentence))])
-            loss.append(dy.binary_log_loss(dy.reshape(attention,(len(sentence),)), ty))
-            h_t = dy.concatenate([context, entity_embeds])
-            hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-            out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
-            label = dy.scalarInput(label)
-            loss.append(dy.binary_log_loss(out_vector, label))
+            # attention, context = self.self_attend(features)
+            # ty = dy.vecInput(len(sentence))
+            # ty.set([0 if i!=trigger else 1 for i in range(len(sentence))])
+            # loss.append(dy.binary_log_loss(dy.reshape(attention,(len(sentence),)), ty))
+            # h_t = dy.concatenate([context, entity_embeds])
+            # hidden = dy.tanh(self.lb * h_t + self.lb_bias)
+            # out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+            # label = dy.scalarInput(label)
+            # loss.append(dy.binary_log_loss(out_vector, label))
 
             # Get decoding losses
             last_output_embeddings = self.pattern_embeddings[0]
@@ -175,14 +175,14 @@ class LSTMLM:
 
     def get_pred(self, sentence, pos, chars, entity):
         features = self.encode_sentence(sentence, pos, chars)
-        entity_embeds = features[entity]
-        attention, context = self.self_attend(features)
-        attention = attention.vec_value()
-        # pred_trigger = attention.index(max(attention))
-        h_t = dy.concatenate([context, entity_embeds])
-        hidden = dy.tanh(self.lb * h_t + self.lb_bias)
-        out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
-        res = 1 if out_vector.npvalue() > 0.0005 else 0
+        # entity_embeds = features[entity]
+        # attention, context = self.self_attend(features)
+        # attention = attention.vec_value()
+        # # pred_trigger = attention.index(max(attention))
+        # h_t = dy.concatenate([context, entity_embeds])
+        # hidden = dy.tanh(self.lb * h_t + self.lb_bias)
+        # out_vector = dy.reshape(dy.logistic(self.lb2 * hidden + self.lb2_bias), (1,))
+        # res = 1 if out_vector.npvalue() > 0.0005 else 0
         rule = self.decode(features)
         # probs = dy.softmax(out_vector).vec_value()
-        return attention, res, out_vector.npvalue(), rule
+        return rule
