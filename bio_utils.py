@@ -1,4 +1,4 @@
-from nltk import sent_tokenize
+from nltk import sent_tokenize, pos_tag
 import re
 import numpy as np
 np.random.seed(1)
@@ -66,7 +66,9 @@ def sanitizeWord(w):
     if w.startswith("$T"):
         return w
     if w == ("xTHEMEx"):
-        return "THEME"
+        return "xTHEMEx"
+    if w == ("xTRIGGERx"):
+        return "xTRIGGERx"
     w = w.lower()
     if is_number(w):
         return "xnumx"
@@ -90,7 +92,7 @@ def is_number(s):
     return False
 
 def word_tokenize(text):
-    return re.findall(r"[\w|#\w|@\w]+|[^\w\s,]",text)
+    return re.findall(r"[\w]+|[^\w\s,]",text)
 
 def get_token_spans(text):
     """
@@ -172,18 +174,16 @@ def replace_protein(words, entities, starts, ends, proteins):
             es.append(ends[i])
     return res, ss, es
 
-def prepare_data(dirname, valids=None):
+def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"), 
+    char_lang=Lang("3"), rule_lang=Lang("4"), train=list(), valids=None):
+    raw_train = dict()
     if valids:
         vj = json.load(open(valids))
     else:
         vj = dict()
-    with open("rules/raw.json") as f:
+    with open("rules/rules.json") as f:
         rules = json.load(f)
     maxl = 0
-    input_lang = Lang("input")
-    pos_lang = Lang("position")
-    char_lang = Lang("char")
-    train = dict()
     for fname in glob.glob(os.path.join(dirname, '*.a1')):
         root = os.path.splitext(fname)[0]
         name = os.path.basename(root)
@@ -232,23 +232,14 @@ def prepare_data(dirname, valids=None):
                 e = int(ends[-1])
                 x = list(get_trigger(s, e, entities, phosphorylations))
                 y = list(get_entity(s, e, entities, x))
-                # proteins = [t[2] for t in x]
-                # triggers = [t[1] for t in x]
-                # new_words = replace_protein(words, entities, starts, triggers+proteins)
-                # temp = []
-                # for i,w in enumerate(new_words):
-                #     sw = sanitizeWord(w)
-                #     if sw:
-                #         temp.append(sw)
-                # new_words = temp
                 for entity in y:
                     words, starts, ends = replace_protein(words, entities, starts, ends, [entity])
                 for res in x:
                     tlbl, trigger, entity, rule = res
-                    if rule in rules:
-                        rule = word_tokenize(rules[rule])
-                    else:
+                    if rule not in rules:
                         rule = []
+                    else:
+                        rule = rules[rule]
                     words, starts, ends = replace_protein(words, entities, starts, ends, [trigger, entity])
                 temp = []
                 temp_s = []
@@ -260,217 +251,97 @@ def prepare_data(dirname, valids=None):
                         temp_s.append(starts[i])
                         temp_e.append(ends[i])
                 words = temp
-                words_final = words[:]
                 starts = temp_s
                 ends = temp_e
-                train[txt+str(sentnece_count)] = [[None, starts, ends], dict()]
                 for res in x:
                     tlbl, trigger, entity, rule = res
                     if rule in rules:
-                        rule = word_tokenize(rules[rule])
+                        rule = rules[rule]
+                        rule_lang.addSentence(rule)
                     else:
                         rule = []
                     try:
+                        temp_w = words[:]
                         trigger_pos = (words.index("$"+trigger))
-                        words_final[trigger_pos] = sanitizeWord(entities[trigger][-1])
+                        temp_w[trigger_pos] = sanitizeWord(entities[trigger][-1])
                         e_pos = words.index("$"+entity)
-                        words_final[e_pos] = "xTHEMEx"
+                        temp_w[e_pos] = "xTHEMEx"
+                        temp_w = ["xOTHERx" if "$" in w else w for w in temp_w]
                         pos = [i-e_pos for i in range(len(words))]
                         pos_lang.addSentence(pos)
-                        if entity not in train[txt+str(sentnece_count)][1]:
-                            train[txt+str(sentnece_count)][1][entity] = [(entity, e_pos, trigger_pos, tlbl, pos, rule)]
-                        else: #if trigger_pos not in train[entity][3]:
-                            train[txt+str(sentnece_count)][1][entity].append((entity, e_pos, trigger_pos, tlbl, pos, rule))
+                        input_lang.addSentence(temp_w)
+                        if txt+entity not in raw_train:
+                            raw_train[txt+entity] = (temp_w, entity, e_pos, [trigger_pos], [tlbl], pos, [rule])
+                        else:
+                            raw_train[txt+entity][3].append(trigger_pos)
+                            raw_train[txt+entity][4].append(tlbl)
+                            raw_train[txt+entity][-1].append(rule)
                     except Exception as ex:
                         continue
-                        # print (ex.args)
-                        # print (words)
-                        # print (starts[0])
-                        # print (ends[-1])
-                        # print (entities[res[1]])
-                        # print (entities[res[2]])
                 for entity in y:
                     try:
+                        temp_w = words[:]
                         e_pos = words.index("$"+entity)
-                        words_final[e_pos] = "protein"
+                        temp_w[e_pos] = "xTHEMEx"
+                        temp_w = ["xOTHERx" if "$" in w else w for w in temp_w]
                         pos = [i-e_pos for i in range(len(words))]
                         pos_lang.addSentence(pos)
-                        input_lang.addSentence(res)
-                        train[txt+str(sentnece_count)][1][entity] = [(entity, e_pos, -1, "NoRel", pos, [])]
+                        input_lang.addSentence(temp_w)
+                        raw_train[txt+entity] = (temp_w, entity, e_pos, [-1], ["NoRel"], pos, [[]])
                     except:
                         continue
                         # print (words)
                         # print (new_words)
                         # print ([(p,entities[p]) for p in triggers+proteins])
-                train[txt+str(sentnece_count)][0][0] = words_final
-                input_lang.addSentence(words_final)
     for i, w in input_lang.index2word.items():
         char_lang.addSentence(w)
-    return input_lang, pos_lang, char_lang, train
+    return input_lang, pos_lang, char_lang, rule_lang, train+list(raw_train.values())
 
-def parse_json_data(input_lang, pos_lang, char_lang, train):
-    with open("rules/raw.json") as f:
+def parse_json_data():
+    with open("rules/rules.json") as f:
         rules = json.load(f)
-    rule_lang = Lang("rule")
-    with open("events.json") as f:
-        j = json.load(f)
-        for event in j:
-            sentence = event["sentence"]
-            rule = rules[event["rule"]]
-            rule = word_tokenize(rule)
-            entity = event["entity"]
-            sentence = sentence[:entity[1][0]]+"xTHEMEx"+sentence[entity[1][1]:]
-            trigger = event["trigger"]
-            words = []
-            for w in word_tokenize(sentence):
-                w = sanitizeWord(w)
-                if w:
-                    words.append(w)
-            e_pos = words.index("THEME")
-            st_pos = e_pos-10 if e_pos-10 > 0 else 0
-            ed_pos = e_pos+11 if e_pos+11 < len(words) else len(words)
-            words = words[st_pos: ed_pos]
-            pos = [i-e_pos for i in range(st_pos, e_pos)]+[0]+[i-e_pos for i in range(e_pos+1, ed_pos)]
-            strigger = sanitizeWord(word_tokenize(trigger[0])[0])
-            if not strigger:
-                for w in word_tokenize(trigger[0]):
-                    if sanitizeWord(w):
-                        strigger = w
-                        break
-            trigger_pos = None
-            try:
-                trigger_pos = words.index(strigger)
-            except:
-                continue
-            if trigger_pos:
-                input_lang.addSentence(words)
-                pos_lang.addSentence(pos)
-                rule_lang.addSentence(rule)
-                train.append((words, "T?", e_pos-st_pos, [trigger_pos], "Phosphorylation", pos, rule))
-    for i, w in input_lang.index2word.items():
-        char_lang.addSentence(w)
-    return input_lang, pos_lang, char_lang, rule_lang, train
+    triggers = dict()
+    valids = dict()
+    with open("events_new.json") as f:
+        pubmed = json.load(f)
+        i = 0
+        for sentence in pubmed:
+            i += 1
+            with open("pubmed2/%d.txt"%i, "w") as txt:
+                txt.write(sentence)
+            j = 1
+            k = len(pubmed[sentence].keys())+1
+            l = 1
+            for eid in pubmed[sentence]:
+                entity = pubmed[sentence][eid]["entity"]
+                with open("pubmed2/%d.a1"%i, "a") as a1:
+                    a1.write("T%d\tProtein %d %d\t%s\n"%(j, entity[1][0], entity[1][1], entity[0]))
+                for event in pubmed[sentence][eid]["events"]:
+                    trigger = event["trigger"]
+                    rule = event["rule"]
+                    valids["pubmed2/%d/E%d"%(i, l)] = rule 
+                    with open("pubmed2/%d.a2"%i, "a") as a2:
+                        if "%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1]) not in triggers:
+                            triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])] = k
+                            k += 1
+                        a2.write("T%d\tPhosphorylation %d %d\t%s\n"%(triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])], trigger[1][0], trigger[1][1], trigger[0]))
+                        a2.write("E%d\tPhosphorylation:T%d Theme:T%d\n"%(l, triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])], j))
+                    l += 1
+                j += 1
+    print (json.dumps(valids))
 
-def prepare_test(fname, dev=False, valids=None):
-    if valids:
-        vj = json.load(open(valids))
-    else:
-        vj = dict()
-    with open("rules/raw.json") as f:
-        rules = json.load(f)
-    tcount = 0
-    test = dict()
-    root = os.path.splitext(fname)[0]
-    name = os.path.basename(root)
-    txt = root + '.txt'
-    a1 = root + '.a1'
-    entities = dict()
-    with open(a1) as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('T'):
-                [id, data, text] = line.split('\t') 
-                [label, start, end] = data.split(' ')
-                entities[id] = (label, int(start), int(end), text)
-                tcount += 1
-    if dev:
-        phosphorylations = []
-        a2 = root + '.a2'
-        with open(a2) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('T'):
-                    [id, data, text] = line.split('\t') 
-                    [label, start, end] = data.split(' ')
-                    entities[id] = (label, int(start), int(end), text)
-                if line.startswith('E') and "Phosphorylation" in line:
-                    [id, data] = line.split('\t')
-                    temp = data.split(' ')
-                    [tlbl, trigger] = temp[0].split(':')
-                    [elbl, entity] = temp[1].split(':')
-                    if valids and root+"/"+id in vj:
-                        rule = (vj[root+"/"+id])
-                    else:
-                        rule = "null"
-                    if ((tlbl, trigger, entity, rule)) not in phosphorylations:
-                        phosphorylations.append((tlbl, trigger, entity, rule))
-    with open(txt) as f:
-        text = f.read()
-        for words, starts, ends in get_token_spans(text):
-            s = int(starts[0])
-            e = int(ends[-1])
-            if dev:
-                x = list(get_trigger(s, e, entities, phosphorylations))
-                for res in x:
-                    try:
-                        tlbl, trigger, entity, rule = res
-                        if rule in rules:
-                            rule = word_tokenize(rules[rule])
-                        else:
-                            rule = []
-                        new_words, new_starts, new_ends = replace_protein(words, entities, starts, ends, [trigger, entity])
-                        temp = []
-                        temp_s = []
-                        temp_e = []
-                        for i,w in enumerate(new_words):
-                            sw = sanitizeWord(w)
-                            if sw:
-                                temp.append(sw)
-                                temp_s.append(new_starts[i])
-                                temp_e.append(new_ends[i])
-                        new_words = temp
-                        new_starts = temp_s
-                        new_ends = temp_e
-                        trigger_pos = (new_words.index("$"+trigger))
-                        new_words[trigger_pos] = sanitizeWord(entities[trigger][-1])
-                        e_pos = new_words.index("$"+entity)
-                        st_pos = e_pos-10 if e_pos-10 > 0 else 0
-                        ed_pos = e_pos+11 if e_pos+11 < len(new_words) else len(new_words)
-                        if trigger_pos < ed_pos and trigger_pos > st_pos:
-                            trigger_pos = trigger_pos - st_pos
-                        else:
-                            trigger_pos = -1
-                        pos = [i-e_pos for i in range(st_pos, e_pos)]+[0]+[i-e_pos for i in range(e_pos+1, ed_pos)]
-                        res = new_words[st_pos: ed_pos]#["OTHER" if w.startswith("$T") and w != "$"+entity else w for w in new_words[st_pos: ed_pos]]
-                        res[e_pos-st_pos] = "THEME"
-                        if entity not in test:
-                            test[entity] = (res, entity, e_pos-st_pos, trigger_pos, tlbl, pos, rule, new_starts[st_pos: ed_pos], new_ends[st_pos: ed_pos])
-                        else:
-                            test[entity][3].append(trigger_pos)
-                    except:
-                        continue
-            else:
-                x = []
-            y = list(get_entity(s, e, entities, x))
-            for entity in y:
-                new_words, new_starts, new_ends = replace_protein(words, entities, starts, ends, [entity])
-                temp = []
-                temp_s = []
-                temp_e = []
-                for i,w in enumerate(new_words):
-                    sw = sanitizeWord(w)
-                    if sw:
-                        temp.append(sw)
-                        temp_s.append(new_starts[i])
-                        temp_e.append(new_ends[i])
-                new_words = temp
-                new_starts = temp_s
-                new_ends = temp_e
-                try:
-                    e_pos = new_words.index("$"+entity)
-                    st_pos = e_pos-10 if e_pos-10 > 0 else 0
-                    ed_pos = e_pos+11 if e_pos+11 < len(new_words) else len(new_words)
-                    pos = [i-e_pos for i in range(st_pos, e_pos)]+[0]+[i-e_pos for i in range(e_pos+1, ed_pos)]
-                    res = new_words[st_pos: ed_pos]#["OTHER" if w.startswith("$T") and w != "$"+entity else w for w in new_words[st_pos: ed_pos]]
-                    res[e_pos-st_pos] = "THEME"
-                    test[entity] = (res,entity, e_pos-st_pos, [-1], None, pos, [], new_starts[st_pos: ed_pos], new_ends[st_pos: ed_pos])
-                except:
-                    continue
-    return test.values(), tcount
 
 # if __name__ == '__main__':
 
-
+#     input_lang = Lang("input")
+#     pl1 = Lang("position")
+#     char = Lang("char")
+#     rule_lang = Lang("rule")
+#     raw_train = list()
+#     input_lang, pl1, char, rule_lang, raw_train = prepare_data("BioNLP-ST-2013_GE_train_data_rev3")
+#     for t in raw_train:
+#         if t[3] != -1:
+#             print (t)
     
 #     parser = argparse.ArgumentParser()
 #     parser.add_argument('datadir')

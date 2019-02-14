@@ -20,9 +20,14 @@ if __name__ == '__main__':
     parser.add_argument('datadir')
     parser.add_argument('dev_datadir')
     args = parser.parse_args()
-    input_lang, pl1, char, raw_train = prepare_data(args.datadir)
+    input_lang = Lang("input")
+    pl1 = Lang("position")
+    char = Lang("char")
     rule_lang = Lang("rule")
-    input2_lang, pl2, char2, raw_test = prepare_data(args.dev_datadir)
+    raw_train = list()
+    input_lang, pl1, char, rule_lang, raw_train = prepare_data(args.datadir,input_lang, pl1, char, rule_lang, raw_train)
+    input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed2",input_lang, pl1, char, rule_lang, raw_train, "valids2.json")
+    input2_lang, pl2, char2, rule_lang2, raw_test = prepare_data(args.dev_datadir, valids="valids.json")
     # input_lang, pl1, char, rule_lang, raw_train = parse_json_data(input_lang, pl1, char, raw_train)
     model = LSTMLM.load(args.model)
     i = j = 0
@@ -59,54 +64,65 @@ if __name__ == '__main__':
     #     candidates = []
     #     phosphos = dict()
     #     events = defaultdict(list)
-    test = []
+    test = list()
+    i = j = 0
     for datapoint in raw_test:
-        if datapoint[4]:
-            try:
-                i += 1
-                test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]]+[1],
-                    datapoint[1],
-                    datapoint[2],
-                    datapoint[3], 
-                    input_lang.label2id[datapoint[4]], 
-                    [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[5]]+[0],
-                    [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]+["EOS"]],[]))
-            except:
-                print (datapoint)
+        if datapoint[3][0] != -1:
+            i += len(datapoint[3])
+            test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]]+[1],
+                datapoint[1],#entity
+                datapoint[2],#entity position
+                datapoint[3],#trigger position
+                [input_lang.label2id[l] for l in datapoint[4]],#trigger label
+                [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[5]]+[0],#positions
+                [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]+["EOS"]],
+                [[rule_lang.word2index[p] for p in rule + ["EOS"]] for rule in datapoint[6]]))
         else:
-            # try:
             j += 1
             test.append(([input_lang.word2index[w] if w in input_lang.word2index else 2 for w in datapoint[0]]+[1],
                 datapoint[1],
                 datapoint[2],
-                datapoint[3], 0, 
-                [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[-2]]+[0],
-                [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]+["EOS"]],[]))
-            # except:
-            #     print (datapoint)
-
+                datapoint[3], [0], 
+                [pl1.word2index[p] if p in pl1.word2index else 2 for p in datapoint[5]]+[0],
+                [[char.word2index[c] if c in char.word2index else 2 for c in w] for w in datapoint[0]+["EOS"]],
+                [rule_lang.word2index["EOS"]]))
     print(i,j)
-    s = 0
-    r = 0
+
+    predict = 0.0
+    label_correct = 0.0
+    trigger_correct = 0.0
+    both_correct = 0.0
     tp = 0
+    s = 0
+    r = 197
+    references = []
+    candidates = []
     for datapoint in test:
-        sentence = datapoint[0]
-        eid = datapoint[1]
-        entity = datapoint[2]
-        triggers = datapoint[3]
-        pos = datapoint[-3]
-        chars = datapoint[-2]
-        pred_triggers, score = (model.get_pred(sentence, pos,chars, entity))
+        triggers = datapoint[3]  
+        rules = datapoint[-1]             
+        pred_triggers, score, contexts, hidden, pred_rules = model.get_pred(datapoint)
         if len(pred_triggers) != 0 or triggers[0] != -1:
             if len(pred_triggers) != 0:
                 s += len(pred_triggers)
-            if triggers[0] != -1:
-                r += len(triggers)
-            for t in pred_triggers:
-                if t in triggers:
-                    tp += 1
+            # if triggers[0] != -1:
+            #     r += len(triggers)
+            for k, t in enumerate(pred_triggers):
+                with open("rules.txt", "a") as f:
+                    f.write(' '.join([rule_lang.index2word[id] for id in pred_rules[k]]))
+                    if t in triggers:
+                        tp += 1
+                        j = triggers.index(t)
+                        if rules[j][0] != 0:
+                            f.write('-$|$-'+' '.join([rule_lang.index2word[id] for id in rules[j][:-1]]))
+                            references.append([rules[j][:-1]])
+                            candidates.append(pred_rules[k])
+                    f.write('\n')
     precision = tp/s if s!= 0 else 0
-    print ("Recall: %f Precision: %f"%(tp/r, precision))
+    recall = tp/r
+    f1 = 2*(precision*recall)/(recall+precision) if recall+precision != 0 else 0
+    bleu = corpus_bleu(references, candidates)
+    print (tp, r, s)
+    print ("Recall: %.4f Precision: %.4f F1: %.4f BLEU: %.4f"%(recall, precision, f1, bleu))
         # for i, datapoint in enumerate(test):
         #     sentence = datapoint[0]
         #     eid = datapoint[1]
