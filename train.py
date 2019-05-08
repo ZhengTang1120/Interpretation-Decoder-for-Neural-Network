@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('datadir')
     parser.add_argument('dev_datadir')
     parser.add_argument('outdir')
+    parser.add_argument('n_sample')
     args = parser.parse_args()
 
     input_lang = Lang("input")
@@ -23,8 +24,19 @@ if __name__ == '__main__':
     char = Lang("char")
     rule_lang = Lang("rule")
     raw_train = list()
-    input_lang, pl1, char, rule_lang, raw_train = prepare_data(args.datadir,input_lang, pl1, char, rule_lang, raw_train)
-    input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed2",input_lang, pl1, char, rule_lang, raw_train, "valids2.json")
+
+    if os.path.exists("indexes_all_2K2.pickle"):
+        input_lang, pl1, char, rule_lang, raw_train = pickle.load(open("indexes_all_2K2.pickle", "rb"))
+    else:
+        input_lang, pl1, char, rule_lang, raw_train = prepare_data(args.datadir, input_lang, pl1, char, rule_lang, raw_train)
+        # input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed_ge", input_lang, pl1, char, rule_lang, raw_train, "valids_ge.json", n_sample=int(args.n_sample))
+        input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed_loc", input_lang, pl1, char, rule_lang, raw_train, "valids_loc.json", n_sample=int(args.n_sample))
+        input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed_ge", input_lang, pl1, char, rule_lang, raw_train, "valids_ge.json", n_sample=int(args.n_sample))
+        input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed2", input_lang, pl1, char, rule_lang, raw_train, "valids2.json", n_sample=int(args.n_sample))
+        with open("indexes_all_2K2.pickle", "wb") as f:
+            pickle.dump((input_lang, pl1, char, rule_lang, raw_train), f)
+    # input_lang, pl1, char, rule_lang = pickle.load(open("indexes_%s_%s.pickle"%(args.label, args.n_sample), "rb"))
+
     input2_lang, pl2, char2, rule_lang2, raw_test = prepare_data(args.dev_datadir, valids="valids.json")
     embeds = load_embeddings("embeddings_november_2016.txt", input_lang)
     model = LSTMLM(input_lang.n_words, char.n_words, 50, 50, 100, 200, pl1.n_words, 5, len(input_lang.labels), 
@@ -83,32 +95,50 @@ if __name__ == '__main__':
             label_correct = 0.0
             trigger_correct = 0.0
             both_correct = 0.0
-            tp = 0
-            s = 0
-            r = 197
-            references = []
-            candidates = []
+            tp = [0,0,0]
+            s = [0,0,0]
+            r = [0,0,0]
+            references = [[],[],[]]
+            candidates = [[],[],[]]
             for datapoint in test:
-                triggers = datapoint[3]  
+                triggers = datapoint[3]
+                labels = datapoint[4]  
                 rules = datapoint[-1]             
-                pred_triggers, score, contexts, hidden, pred_rules = model.get_pred(datapoint)
+                sentence = datapoint[0]
+                entity = datapoint[2]
+                pos = datapoint[5]
+                chars = datapoint[6]
+
+                pred_triggers, score, contexts, hidden, pred_rules = model.get_pred(sentence, pos, chars, entity)
                 if len(pred_triggers) != 0 or triggers[0] != -1:
                     if len(pred_triggers) != 0:
-                        s += len(pred_triggers)
-                    # if triggers[0] != -1:
-                    #     r += len(triggers)
+                        for t in pred_triggers:
+                            s[t[1]-1] += 1
+                        # s += len(pred_triggers)
+                    if triggers[0] != -1:
+                        for t in labels:
+                            r[t-1] += 1
+                        # r += len(triggers)
                     for k, t in enumerate(pred_triggers):
-                        if t in triggers:
-                            tp += 1
-                            j = triggers.index(t)
-                            references.append([rules[j]])
-                            candidates.append(pred_rules[k])
-            precision = tp/s if s!= 0 else 0
-            recall = tp/r
-            f1 = 2*(precision*recall)/(recall+precision) if recall+precision != 0 else 0
-            bleu = corpus_bleu(references, candidates)
-            print (tp, r, s)
-            print ("Recall: %.4f Precision: %.4f F1: %.4f BLEU: %.4f"%(recall, precision, f1, bleu))
+                        if t[0] in triggers and labels[triggers.index(t[0])] == t[1]:
+                            tp[t[1]-1] += 1
+                            j = triggers.index(t[0])
+                            if rules[j][0] != 0:
+                                references[t[1]-1].append([rules[j]])
+                                candidates[t[1]-1].append(pred_rules[k])
+            precision = [0,0,0]
+            recall = [0,0,0]
+            f1 = [0,0,0]
+            for j in range(3):
+                precision = tp[j]/s[j] if s[j]!= 0 else 0
+                recall = tp[j]/r[j]
+                f1 = 2*(precision*recall)/(recall+precision) if recall+precision != 0 else 0
+                try:
+                    bleu = corpus_bleu(references[j], candidates[j])
+                except:
+                    bleu = 0
+                print ("%s Recall: %.4f Precision: %.4f F1: %.4f BLEU: %.4f"%(input_lang.labels[j+1], recall, precision, f1, bleu))
+            
             if not os.path.exists(args.outdir):
                 os.makedirs(args.outdir)
             model.save("%s/%d"%(args.outdir,i/10))

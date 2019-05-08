@@ -8,6 +8,7 @@ import json
 import os
 import glob
 import argparse
+import random
 
 from collections import defaultdict
 
@@ -48,6 +49,7 @@ def load_embeddings(file, lang):
             vector = np.array([float(i) for i in line_split[1:]])
             embedding_size = vector.shape[0]
             emb_dict[word] = vector
+    print (lang.n_words)
     for i in range(3, lang.n_words):
         base = math.sqrt(6/embedding_size)
         word = lang.index2word[i]
@@ -174,8 +176,15 @@ def replace_protein(words, entities, starts, ends, proteins):
             es.append(ends[i])
     return res, ss, es
 
+def check_events(line):
+    event_set = {"Gene_expression", "Localization", "Phosphorylation"}
+    for event in event_set:
+        if event in line:
+            return True
+    return False
+
 def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"), 
-    char_lang=Lang("3"), rule_lang=Lang("4"), train=list(), valids=None):
+    char_lang=Lang("3"), rule_lang=Lang("4"), train=list(), valids=None, n_sample=0):
     raw_train = dict()
     if valids:
         vj = json.load(open(valids))
@@ -206,7 +215,7 @@ def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"),
                     [id, data, text] = line.split('\t') 
                     [label, start, end] = data.split(' ')
                     entities[id] = (label, int(start), int(end), text)
-                if line.startswith('E') and "Phosphorylation" in line:
+                if line.startswith('E') and check_events(line):
                     [id, data] = line.split('\t')
                     temp = data.split(' ')
                     [tlbl, trigger] = temp[0].split(':')
@@ -253,6 +262,7 @@ def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"),
                 words = temp
                 starts = temp_s
                 ends = temp_e
+                triggers = [t[1] for t in x]
                 for res in x:
                     tlbl, trigger, entity, rule = res
                     if rule in rules:
@@ -266,13 +276,26 @@ def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"),
                         temp_w[trigger_pos] = sanitizeWord(entities[trigger][-1])
                         e_pos = words.index("$"+entity)
                         temp_w[e_pos] = "xTHEMEx"
-                        temp_w = ["xOTHERx" if "$" in w else w for w in temp_w]
+                        for i, w in enumerate(temp_w):
+                            if "$" in w: 
+                                if w[1:] not in triggers:
+                                    temp_w[i] = "xOTHERx"
+                                else:
+                                    if sanitizeWord(entities[w[1:]][-1]):
+                                        temp_w[i] = sanitizeWord(entities[w[1:]][-1])
+                                    else:
+                                        temp_w[i] = entities[w[1:]][-1]
+                        # temp_w = ["xOTHERx" if "$" in w and w[1:] not in triggers else w for w in temp_w]
                         pos = [i-e_pos for i in range(len(words))]
                         pos_lang.addSentence(pos)
                         input_lang.addSentence(temp_w)
                         if txt+entity not in raw_train:
                             raw_train[txt+entity] = (temp_w, entity, e_pos, [trigger_pos], [tlbl], pos, [rule])
                         else:
+                            if (raw_train[txt+entity][3][0] == -1):
+                                print (raw_train[txt+entity])
+                                print ('/////')
+                                exit()
                             raw_train[txt+entity][3].append(trigger_pos)
                             raw_train[txt+entity][4].append(tlbl)
                             raw_train[txt+entity][-1].append(rule)
@@ -283,7 +306,16 @@ def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"),
                         temp_w = words[:]
                         e_pos = words.index("$"+entity)
                         temp_w[e_pos] = "xTHEMEx"
-                        temp_w = ["xOTHERx" if "$" in w else w for w in temp_w]
+                        for i, w in enumerate(temp_w):
+                            if "$" in w: 
+                                if w[1:] not in triggers:
+                                    temp_w[i] = "xOTHERx"
+                                else:
+                                    if sanitizeWord(entities[w[1:]][-1]):
+                                        temp_w[i] = sanitizeWord(entities[w[1:]][-1])
+                                    else:
+                                        temp_w[i] = entities[w[1:]][-1]
+                        # temp_w = ["xOTHERx" if "$" in w else w for w in temp_w]
                         pos = [i-e_pos for i in range(len(words))]
                         pos_lang.addSentence(pos)
                         input_lang.addSentence(temp_w)
@@ -295,53 +327,152 @@ def prepare_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"),
                         # print ([(p,entities[p]) for p in triggers+proteins])
     for i, w in input_lang.index2word.items():
         char_lang.addSentence(w)
+    if n_sample:
+        sample = random.sample(list(raw_train.values()), n_sample)
+        return input_lang, pos_lang, char_lang, rule_lang, train+sample
     return input_lang, pos_lang, char_lang, rule_lang, train+list(raw_train.values())
 
+def prepare_test_data(dirname, input_lang=Lang("1"), pos_lang=Lang("2"), 
+    char_lang=Lang("3"), rule_lang=Lang("4")):
+    raw_test = list()
+    maxl = 0
+    for fname in glob.glob(os.path.join(dirname, '*.a1')):
+        root = os.path.splitext(fname)[0]
+        name = os.path.basename(root)
+        txt = root + '.txt'
+        a1 = root + '.a1'
+        open(root+".a2p", "w").close()
+        entities = dict()
+        lasteid = None
+        with open(a1) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('T'):
+                    [id, data, text] = line.split('\t') 
+                    [label, start, end] = data.split(' ')
+                    entities[id] = (label, int(start), int(end), text)
+                    lasteid = id
+        with open(txt) as f:
+            sentences = list()
+            text = f.read()
+            sentnece_count = 0
+            for words, starts, ends in get_token_spans(text):
+                sentnece_count += 1
+                if len(words) > maxl:
+                    maxl = len(words)
+                s = int(starts[0])
+                e = int(ends[-1])
+                y = list(get_entity(s, e, entities, []))
+                for entity in y:
+                    words, starts, ends = replace_protein(words, entities, starts, ends, [entity])
+                temp = []
+                temp_s = []
+                temp_e = []
+                for i,w in enumerate(words):
+                    sw = sanitizeWord(w)
+                    if sw:
+                        temp.append(sw)
+                        temp_s.append(starts[i])
+                        temp_e.append(ends[i])
+                words = temp
+                starts = temp_s
+                ends = temp_e
+                for entity in y:
+                    try:
+                        temp_w = words[:]
+                        e_pos = words.index("$"+entity)
+                        temp_w[e_pos] = "xTHEMEx"
+                        temp_w = ["xOTHERx" if "$" in w else w for w in temp_w]
+                        pos = [i-e_pos for i in range(len(words))]
+                        pos_lang.addSentence(pos)
+                        input_lang.addSentence(temp_w)
+                        raw_test.append((temp_w, entity, e_pos, pos, starts, ends, lasteid, root))
+                    except:
+                        continue
+                        # print (words)
+                        # print (new_words)
+                        # print ([(p,entities[p]) for p in triggers+proteins])
+    for i, w in input_lang.index2word.items():
+        char_lang.addSentence(w)
+    return input_lang, pos_lang, char_lang, rule_lang, raw_test
+
 def parse_json_data():
-    with open("rules/rules.json") as f:
-        rules = json.load(f)
     triggers = dict()
     valids = dict()
-    with open("events_new.json") as f:
+    with open("lo_events.json") as f:
         pubmed = json.load(f)
         i = 0
         for sentence in pubmed:
             i += 1
-            with open("pubmed2/%d.txt"%i, "w") as txt:
+            with open("pubmed_loc/%d.txt"%i, "w") as txt:
                 txt.write(sentence)
             j = 1
             k = len(pubmed[sentence].keys())+1
             l = 1
             for eid in pubmed[sentence]:
                 entity = pubmed[sentence][eid]["entity"]
-                with open("pubmed2/%d.a1"%i, "a") as a1:
+                with open("pubmed_loc/%d.a1"%i, "a") as a1:
                     a1.write("T%d\tProtein %d %d\t%s\n"%(j, entity[1][0], entity[1][1], entity[0]))
                 for event in pubmed[sentence][eid]["events"]:
                     trigger = event["trigger"]
                     rule = event["rule"]
-                    valids["pubmed2/%d/E%d"%(i, l)] = rule 
-                    with open("pubmed2/%d.a2"%i, "a") as a2:
+                    valids["pubmed_loc/%d/E%d"%(i, l)] = rule 
+                    with open("pubmed_loc/%d.a2"%i, "a") as a2:
                         if "%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1]) not in triggers:
                             triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])] = k
                             k += 1
-                        a2.write("T%d\tPhosphorylation %d %d\t%s\n"%(triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])], trigger[1][0], trigger[1][1], trigger[0]))
-                        a2.write("E%d\tPhosphorylation:T%d Theme:T%d\n"%(l, triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])], j))
+                        a2.write("T%d\tLocalization %d %d\t%s\n"%(triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])], trigger[1][0], trigger[1][1], trigger[0]))
+                        a2.write("E%d\tLocalization:T%d Theme:T%d\n"%(l, triggers["%s%d%d"%(trigger[0], trigger[1][0], trigger[1][1])], j))
                     l += 1
                 j += 1
     print (json.dumps(valids))
 
 
 # if __name__ == '__main__':
+#     # parse_json_data()
 
 #     input_lang = Lang("input")
 #     pl1 = Lang("position")
 #     char = Lang("char")
 #     rule_lang = Lang("rule")
 #     raw_train = list()
-#     input_lang, pl1, char, rule_lang, raw_train = prepare_data("BioNLP-ST-2013_GE_train_data_rev3")
-#     for t in raw_train:
-#         if t[3] != -1:
-#             print (t)
+#     input_lang, pl1, char, rule_lang, raw_train = prepare_data("BioNLP-ST-2013_GE_train_data_rev3", input_lang, pl1, char, rule_lang, raw_train)
+#     input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed_loc", input_lang, pl1, char, rule_lang, raw_train, "valids_loc.json")
+#     input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed_ge", input_lang, pl1, char, rule_lang, raw_train, "valids_ge.json")
+#     input_lang, pl1, char, rule_lang, raw_train = prepare_data("pubmed2", input_lang, pl1, char, rule_lang, raw_train, "valids2.json")
+#     # # input_lang, pl1, char, rule_lang, raw_train2 = prepare_data("BioNLP-ST-2013_GE_devel_data_rev3")
+#     # trainning_set = []
+#     # i = j = 0
+#     print (input_lang.label2id)
+#     for datapoint in raw_train:
+#         print ([input_lang.label2id[l] for l in datapoint[4]])
+    #     if datapoint[3][0] != -1:
+    #         i += len(datapoint[3])
+    #         trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]]+[1],
+    #             datapoint[1],#entity
+    #             datapoint[2],#entity position
+    #             datapoint[3],#trigger position
+    #             [input_lang.label2id[l] for l in datapoint[4]],#trigger label
+    #             [pl1.word2index[p] for p in datapoint[5]]+[0],#positions
+    #             [[char.word2index[c] for c in w] for w in datapoint[0]+["EOS"]],
+    #             [[rule_lang.word2index[p] for p in rule + ["EOS"]] for rule in datapoint[6]]))
+    #     else:
+    #         j += 1
+    #         trainning_set.append(([input_lang.word2index[w] for w in datapoint[0]]+[1],
+    #             datapoint[1],
+    #             datapoint[2],
+    #             datapoint[3], [0], 
+    #             [pl1.word2index[p] for p in datapoint[5]]+[0],
+    #             [[char.word2index[c] for c in w] for w in datapoint[0]+["EOS"]],
+    #             [rule_lang.word2index["EOS"]]))
+    #         print (datapoint)
+    # print(i,j)
+        # if (t[0] != raw_train2[i][0] and t[1]==raw_train2[i][1]):
+#             print (t[0])
+#             print (raw_train2[i][0])
+#             print (t[-1])
+#             print (raw_train2[i][-1])
+#             print (t[1], raw_train2[i][1], raw_train2[i][3])
     
 #     parser = argparse.ArgumentParser()
 #     parser.add_argument('datadir')

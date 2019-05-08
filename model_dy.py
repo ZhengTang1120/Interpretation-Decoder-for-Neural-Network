@@ -1,7 +1,7 @@
 import numpy as np
 import dynet_config
 dynet_config.set(
-    mem=2048,
+    mem=1024,
     random_seed=1,
     # autobatch=True
 )
@@ -65,8 +65,8 @@ class LSTMLM:
         self.lb = self.model.add_parameters((self.hidden_dim, 2 * self.hidden_dim))
         self.lb_bias = self.model.add_parameters((self.hidden_dim))
 
-        self.lb2 = self.model.add_parameters((1, self.hidden_dim))
-        self.lb2_bias = self.model.add_parameters((1))
+        self.lb2 = self.model.add_parameters((4, self.hidden_dim))
+        self.lb2_bias = self.model.add_parameters((4))
 
         self.pattern_embeddings = self.model.add_lookup_parameters((self.rule_size, self.pattern_embeddings_dim))
         self.decoder_lstm = dy.LSTMBuilder(
@@ -77,6 +77,12 @@ class LSTMLM:
         )
         self.pt = self.model.add_parameters((self.rule_size, self.pattern_hidden_dim + self.hidden_dim))
         self.pt_bias = self.model.add_parameters((self.rule_size))
+
+        self.gen_c = self.model.add_parameters((1, self.hidden_dim))
+        self.gen_h = self.model.add_parameters((1, self.pattern_hidden_dim))
+        self.gen_i = self.model.add_parameters((1, self.hidden_dim + self.pattern_embeddings_dim))
+        self.gen_bias = self.model.add_parameters((1))
+
 
     def save(self, name):
         params = (
@@ -143,8 +149,7 @@ class LSTMLM:
         S = dy.transpose(S)
         A = dy.softmax(S)
         context_vector = H_e * A
-        print (context_vector.npvalue().shape)
-        return context_vector
+        return context_vector, A
 
     def train(self, trainning_set):
         losses = []
@@ -155,7 +160,8 @@ class LSTMLM:
             entity = datapoint[2]
             triggers = datapoint[3]
             rules = datapoint[-1]
-            features = self.encode_sentence(sentence, pos, chars)           
+            features = self.encode_sentence(sentence, pos, chars)
+            labels = datapoint[4]           
 
             entity_vec = features[entity]
             contexts = self.entity_attend(features, entity_vec)
@@ -164,17 +170,22 @@ class LSTMLM:
                 if i != entity:
                     h_t = dy.concatenate([c, entity_vec])
                     hidden = dy.tanh(self.lb.expr() * h_t + self.lb_bias.expr())
-                    out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
-                    out = dy.scalarInput(1) if i in triggers else dy.scalarInput(0)
-                    losses.append(dy.binary_log_loss(out_vector, out))
-                    
+                    out_vector = dy.softmax(self.lb2.expr() * hidden + self.lb2_bias.expr())
                     if i in triggers:
+                        label = labels[triggers.index(i)]
+                    else:
+                        label = 0
+                    losses.append(-dy.log(dy.pick(out_vector, label)))
+                    if i in triggers and len(rules[triggers.index(i)])>1:
                         # Get decoding losses
                         last_output_embeddings = self.pattern_embeddings[0]
-                        s = self.decoder_lstm.initial_state().add_input(dy.concatenate([c, last_output_embeddings]))
+                        context = c
+                        s = self.decoder_lstm.initial_state().add_input(dy.concatenate([context, last_output_embeddings]))
                         for pattern in rules[triggers.index(i)]:
                             h_t = s.output()
-                            context = self.attend(contexts, h_t)
+                            context, A = self.attend(contexts, h_t)
+                            # p_gen = dy.logistic(self.gen_c * context + self.gen_h * h_t + self.gen_i * 
+                            #     dy.concatenate([context, last_output_embeddings]) + self.gen_bias)
                             out_vector = self.pt.expr() * dy.concatenate([context, h_t]) + self.pt_bias.expr()
                             probs = dy.softmax(out_vector)
                             losses.append(-dy.log(dy.pick(probs, pattern)))
@@ -196,7 +207,7 @@ class LSTMLM:
         out = []
         for i in range(self.max_rule_length):
             h_t = s.output()
-            context = self.attend(features, h_t)
+            context, A = self.attend(features, h_t)
             out_vector = self.pt.expr() * dy.concatenate([context, h_t]) + self.pt_bias.expr()
             probs = dy.softmax(out_vector).vec_value()
             last_output = probs.index(max(probs))
@@ -208,11 +219,7 @@ class LSTMLM:
                 return out
         return out
 
-    def get_pred(self, datapoint):
-        sentence = datapoint[0] 
-        pos = datapoint[5]
-        chars = datapoint[6] 
-        entity = datapoint[2]
+    def get_pred(self, sentence, pos,chars, entity):
         valid_tags = ['NN', 'VB', 'VBZ', 'VBD', 'JJ', 'VBG', 'NNS', 'VBP', 'VBN']
         features = self.encode_sentence(sentence, pos, chars)
         entity_embeds = features[entity]
@@ -224,9 +231,10 @@ class LSTMLM:
             if i != entity:
                 h_t = dy.concatenate([c, entity_vec])
                 hidden = dy.tanh(self.lb.expr() * h_t + self.lb_bias.expr())
-                out_vector = dy.reshape(dy.logistic(self.lb2.expr() * hidden + self.lb2_bias.expr()), (1,))
+                out_vector = dy.softmax(self.lb2.expr() * hidden + self.lb2_bias.expr()).vec_value()
                 # print (out_vector.npvalue())
-                if out_vector.npvalue() > 0.5:
-                    res.append(i)
+                l = out_vector.index(max(out_vector))
+                if l != 0:
+                    res.append((i, l))
                     rules.append(self.decode(contexts, c))
-        return res, out_vector.npvalue(), contexts, hidden, rules
+        return res, out_vector, contexts, hidden, rules
